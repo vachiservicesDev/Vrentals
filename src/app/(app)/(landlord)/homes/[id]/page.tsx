@@ -122,17 +122,43 @@ export default function RentalHomePage() {
         {past.length > 0 && (
           <section>
             <h2 className="font-display mb-3 text-xl font-semibold text-ink">Past leases</h2>
-            <DataTable
-              caption="Past leases"
-              rows={past}
-              rowKey={(l) => l.id}
-              columns={[
-                { header: 'Tenant', primary: true, cell: (l) => l.tenantName },
-                { header: 'Rent', align: 'right', cell: (l) => formatMoney(l.monthlyRent) },
-                { header: 'From', cell: (l) => <When iso={l.startDate} /> },
-                { header: 'To', cell: (l) => <When iso={l.endDate} /> },
-              ]}
-            />
+            <ul className="grid gap-3">
+              {past.map((l) => {
+                const ledger = charges.filter((c) => c.leaseId === l.id);
+                const owed = ledger.reduce((sum, c) => sum + Number(c.amount) - Number(c.paidAmount), 0);
+                return (
+                  <li key={l.id} className="rounded-lg border border-line bg-white">
+                    <details>
+                      <summary className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
+                        <span className="font-semibold text-ink">{l.tenantName}</span>
+                        <span className="text-sm text-muted">
+                          {formatMoney(l.monthlyRent)} a month · <When iso={l.startDate} /> to <When iso={l.endDate} />
+                          {owed > 0 && <span className="font-semibold text-danger-700"> · {formatMoney(owed)} unpaid</span>}
+                        </span>
+                      </summary>
+                      <div className="border-t border-line p-4">
+                        {ledger.length === 0 ? (
+                          <p className="text-ink-2">No rent was recorded for this lease.</p>
+                        ) : (
+                          <DataTable
+                            caption={`Rent history for ${l.tenantName}`}
+                            rows={ledger}
+                            rowKey={(c) => c.id}
+                            columns={[
+                              { header: 'Month', primary: true, cell: (c) => monthLabel(c.period) },
+                              { header: 'Rent', align: 'right', cell: (c) => formatMoney(c.amount) },
+                              { header: 'Paid', align: 'right', cell: (c) => formatMoney(c.paidAmount) },
+                              { header: 'Paid on', cell: (c) => <When iso={c.paidOn} /> },
+                              { header: 'Status', cell: (c) => <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip> },
+                            ]}
+                          />
+                        )}
+                      </div>
+                    </details>
+                  </li>
+                );
+              })}
+            </ul>
           </section>
         )}
       </div>
@@ -259,7 +285,10 @@ function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge
   async function record(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selected) return;
-    const { chargeId: _ignored, ...body } = formValues(e.currentTarget);
+    const { chargeId: _ignored, received, ...rest } = formValues(e.currentTarget);
+    // The API takes the month's running total; the form asks only for what just arrived.
+    const total = Number(selected.paidAmount) + Number(received ?? 0);
+    const body = { ...rest, paidAmount: received === undefined || Number.isNaN(total) ? received : total.toFixed(2) };
     const result = await action.run('pay', `/api/charges/${selected.id}`, { method: 'PATCH', body }, `Payment recorded for ${monthLabel(selected.period)}.`);
     if (result.ok) {
       setChosen('');
@@ -290,7 +319,7 @@ function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge
         {open.length > 0 && selected && (
           <form key={selected.id + selected.paidAmount} onSubmit={record} noValidate className="grid gap-5 border-t border-line pt-6">
             <h3 className="font-display text-lg font-semibold text-ink">Record a payment</h3>
-            <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ paidAmount: 'Total paid', paidOn: 'Paid on' }} />
+            <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ paidAmount: 'Amount received', paidOn: 'Paid on' }} />
             <FieldRow>
               <SelectField
                 name="chargeId"
@@ -301,16 +330,16 @@ function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge
                 options={open.map((c) => ({ value: c.id, label: `${monthLabel(c.period)}: ${formatMoney(Number(c.amount) - Number(c.paidAmount))} still owed` }))}
               />
               <TextField
-                name="paidAmount"
-                label="Total paid for this month ($)"
+                name="received"
+                label="Amount received ($)"
                 type="number"
                 inputMode="decimal"
                 min={0}
                 step="0.01"
                 required
-                defaultValue={selected.amount}
-                hint="The full amount received so far, not just this payment."
-                errors={action.fieldErrors}
+                defaultValue={(Number(selected.amount) - Number(selected.paidAmount)).toFixed(2)}
+                hint={Number(selected.paidAmount) > 0 ? `Just this payment. ${formatMoney(selected.paidAmount)} was already recorded for this month.` : 'Just this payment.'}
+                errors={action.fieldErrors.paidAmount ? { received: action.fieldErrors.paidAmount } : action.fieldErrors}
               />
             </FieldRow>
             <FieldRow cols={3}>
