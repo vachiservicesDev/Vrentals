@@ -96,3 +96,6 @@ export async function ownedSlot(ownerId: string, id: string) {
     .limit(1);
   return row?.slot ?? null;
 }
+
+/** Said when someone tries to rent out, list or lease a home marked as the one they live in. */
+export const OWN_HOME_NOT_RENTED = 'This is marked as the home you live in. To rent it out, change "How do you use this home?" under Home details first.';

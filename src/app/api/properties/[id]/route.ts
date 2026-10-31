@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { documents, rentCharges, leases, properties, reminders, repairRequests } from '@/db/schema';
+import { documents, rentCharges, leases, listings, properties, reminders, repairRequests, transactions } from '@/db/schema';
 import { removeFile } from '@/lib/storage';
 import { requireLandlord } from '@/lib/auth/guards';
 import { todayEastern } from '@/lib/dates';
 import { ownedProperty } from '@/lib/rentals/access';
 import { liveAgreements } from '@/lib/rentals/agreements';
+import { homeCategoryOf } from '@/lib/rentals/homeowner';
+import { categoryOf } from '@/lib/rentals/money';
 import { pendingPayments } from '@/lib/rentals/payments';
 import { chargeStatus } from '@/lib/rentals/rent';
 import { propertySchema, propertyValues } from '@/lib/rentals/schemas';
@@ -52,6 +54,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const body = propertySchema.partial().safeParse(await request.json());
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });
 
+  if (body.data.use && body.data.use !== property.use) {
+    const blocked = await changeBlocked(property.id, body.data.use);
+    if (blocked) return NextResponse.json({ message: blocked, errors: { fieldErrors: { use: [blocked] } } }, { status: 409 });
+  }
+
   // A cleared optional field arrives as an empty string; store it as empty (null).
   const values = propertyValues(body.data);
   const [updated] = await db
@@ -75,4 +82,22 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   // The rows go with the home; the stored files are removed too (a failure here only leaves files behind).
   await Promise.all(files.map((f) => removeFile(f.path).catch((err) => console.error('[delete home] file not removed', err))));
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Why a home can't switch between rented out and lived in, or null when it can. A home you live
+ * in can't have a tenant or a live listing, and every money entry has to fit the new categories.
+ */
+async function changeBlocked(propertyId: string, to: 'rental' | 'own'): Promise<string | null> {
+  if (to === 'own') {
+    const [lease] = await db.select({ id: leases.id }).from(leases).where(and(eq(leases.propertyId, propertyId), eq(leases.status, 'active'))).limit(1);
+    if (lease) return 'This home has an active lease. End the lease before marking it as the home you live in.';
+    const [listing] = await db.select({ id: listings.id }).from(listings).where(and(eq(listings.propertyId, propertyId), eq(listings.active, true))).limit(1);
+    if (listing) return 'This home is listed for rent. Take the listing down before marking it as the home you live in.';
+  }
+  const rows = await db.select({ type: transactions.type, category: transactions.category }).from(transactions).where(eq(transactions.propertyId, propertyId));
+  const fits = (r: { type: string; category: string }) => (to === 'own' ? homeCategoryOf(r.type, r.category) : categoryOf(r.type, r.category));
+  const misfits = rows.filter((r) => !fits(r)).length;
+  if (misfits) return `${misfits} money ${misfits === 1 ? 'entry doesn\'t' : "entries don't"} fit ${to === 'own' ? 'a home you live in' : 'a rental'}. Change or delete ${misfits === 1 ? 'it' : 'them'} under Money first.`;
+  return null;
 }

@@ -1,16 +1,18 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useResource } from '@/lib/client/api';
 import type { Report as ReportData } from '@/lib/rentals/report';
 import { Button, buttonClass } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/fields';
+import { ReportTabs } from '@/components/money/ReportTabs';
 import { Alert, Chip, DataTable, EmptyState, Loading, PageHeader, Panel, When, formatMoney } from '@/components/ui/ui';
 
 interface Home {
   id: string;
   name: string;
+  use: 'rental' | 'own';
 }
 
 const TYPE_LABEL: Record<string, string> = { expense: 'Expense', income: 'Income', capital: 'Improvement', deposit: 'Deposit' };
@@ -48,11 +50,18 @@ function Report() {
     router.replace(`/reports?${p.toString()}`);
   }
 
-  const homeName = homes.data?.properties.find((h) => h.id === property)?.name;
+  const rentals = (homes.data?.properties ?? []).filter((h) => h.use !== 'own');
+  const onlyOwn = !!homes.data && rentals.length === 0 && homes.data.properties.length > 0;
+  // Someone who only has the home they live in has no profit and loss: show their tax summary.
+  useEffect(() => {
+    if (onlyOwn) router.replace('/reports/home');
+  }, [onlyOwn, router]);
+  const homeName = rentals.find((h) => h.id === property)?.name;
   const years = Array.from({ length: 6 }, (_, i) => String(thisYear - i));
 
   return (
     <>
+      {homes.data?.properties.some((h) => h.use === 'own') && <ReportTabs current="rentals" />}
       <PageHeader
         eyebrow="Money & taxes"
         title="Profit & loss"
@@ -77,7 +86,7 @@ function Report() {
         <SelectField
           name="property"
           label="Home"
-          options={[{ value: '', label: 'All homes' }, ...(homes.data?.properties ?? []).map((h) => ({ value: h.id, label: h.name }))]}
+          options={[{ value: '', label: 'All homes' }, ...rentals.map((h) => ({ value: h.id, label: h.name }))]}
           value={property}
           onChange={(e) => go({ property: e.target.value })}
         />

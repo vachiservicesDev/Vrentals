@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CATEGORIES, type TransactionType } from './money';
+import { HOME_CAPITAL_CATEGORIES, HOME_EXPENSE_CATEGORIES, type PropertyUse } from './homeowner';
 
 const day = z
   .string()
@@ -8,6 +9,7 @@ const day = z
 const money = z.coerce.number({ invalid_type_error: 'Enter an amount.' }).min(0, 'Enter zero or more.').max(1_000_000, 'That amount looks too large.');
 const text = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
 const optional = (max: number) => text(max).optional();
+const sqft = z.coerce.number({ invalid_type_error: 'Enter square feet.' }).int('Use whole square feet.').min(1, 'Enter 1 or more.').max(100_000, 'That looks too large.');
 
 export const propertySchema = z.object({
   name: text(150).min(1, 'Give the home a name, like "Unit 12".'),
@@ -22,6 +24,10 @@ export const propertySchema = z.object({
   purchasePrice: z.union([z.literal(''), money]).optional(),
   landValue: z.union([z.literal(''), money]).optional(),
   placedInService: z.union([z.literal(''), day]).optional(),
+  // 'own' is a home the owner lives in: no tenants, and its money follows Schedule A.
+  use: z.enum(['rental', 'own'], { errorMap: () => ({ message: 'Choose how you use this home.' }) }).optional(),
+  homeSqft: z.union([z.literal(''), sqft]).optional(),
+  officeSqft: z.union([z.literal(''), sqft]).optional(),
 });
 
 export const leaseSchema = z
@@ -82,17 +88,31 @@ export const reminderSchema = z.object({
   notes: optional(5000),
 });
 
-export const transactionSchema = z
-  .object({
-    type: z.enum(['expense', 'income', 'capital', 'deposit'], { errorMap: () => ({ message: 'Choose what kind of entry this is.' }) }),
-    category: z.string().trim().min(1, 'Choose a category.'),
-    date: day,
-    amount: money.refine((v) => v > 0, 'Enter the amount.'),
-    payee: optional(150),
-    paidFrom: z.enum(['business', 'personal']).default('business'),
-    description: optional(2000),
-  })
-  .refine((v) => CATEGORIES[v.type as TransactionType].some((c) => c.value === v.category), { message: 'Choose a category from the list.', path: ['category'] });
+const transactionFields = z.object({
+  type: z.enum(['expense', 'income', 'capital', 'deposit'], { errorMap: () => ({ message: 'Choose what kind of entry this is.' }) }),
+  category: z.string().trim().min(1, 'Choose a category.'),
+  date: day,
+  amount: money.refine((v) => v > 0, 'Enter the amount.'),
+  payee: optional(150),
+  paidFrom: z.enum(['business', 'personal']).default('business'),
+  description: optional(2000),
+});
+
+/** Rental homes use the Schedule E categories. */
+export const transactionSchema = transactionFields.refine((v) => CATEGORIES[v.type as TransactionType].some((c) => c.value === v.category), {
+  message: 'Choose a category from the list.',
+  path: ['category'],
+});
+
+/** A home you live in has payments and improvements only, with its own categories. */
+export const homeTransactionSchema = transactionFields
+  .refine((v) => v.type === 'expense' || v.type === 'capital', { message: 'Your own home has payments and improvements only.', path: ['type'] })
+  .refine((v) => (v.type === 'capital' ? HOME_CAPITAL_CATEGORIES : HOME_EXPENSE_CATEGORIES).some((c) => c.value === v.category), {
+    message: 'Choose a category from the list.',
+    path: ['category'],
+  });
+
+export const transactionSchemaFor = (use: PropertyUse | string) => (use === 'own' ? homeTransactionSchema : transactionSchema);
 
 /** Turns a parsed number back into the string Drizzle's decimal columns expect. */
 export function dec(value: number | undefined | null): string | null {

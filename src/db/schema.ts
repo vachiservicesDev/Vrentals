@@ -62,6 +62,13 @@ export const properties = rentals.table('properties', {
   purchasePrice: decimal('purchase_price', { precision: 12, scale: 2 }),
   landValue: decimal('land_value', { precision: 12, scale: 2 }),
   placedInService: date('placed_in_service'),
+  // 'rental' for a home that's rented out; 'own' for a home the owner lives in. An own home has
+  // no tenant or lease, its money follows Schedule A and cost basis instead of Schedule E, and
+  // placed_in_service holds the day it was bought.
+  use: varchar('use', { length: 10 }).notNull().default('rental'),
+  // For the home office share (self-employed only): the whole home and the office, in square feet.
+  homeSqft: integer('home_sqft'),
+  officeSqft: integer('office_sqft'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

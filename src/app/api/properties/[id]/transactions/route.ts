@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { transactions } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
 import { ownedProperty } from '@/lib/rentals/access';
-import { dec, transactionSchema } from '@/lib/rentals/schemas';
+import { dec, transactionSchemaFor } from '@/lib/rentals/schemas';
 
 const isDay = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const property = await ownedProperty(gate.ownerId, params.id);
   if (!property) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
-  const body = transactionSchema.safeParse(await request.json().catch(() => null));
+  const body = transactionSchemaFor(property.use).safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });
 
   const d = body.data;

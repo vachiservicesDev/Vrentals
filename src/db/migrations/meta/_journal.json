@@ -50,6 +50,13 @@
       "when": 1793418916701,
       "tag": "0006_listings_applications_agreements",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793420000000,
+      "tag": "0007_homeowner",
+      "breakpoints": true
     }
   ]
 }
