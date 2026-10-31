@@ -2,9 +2,12 @@
 // Uncontrolled by default (pages read them with FormData); pass value/onChange to control one.
 import type { ChangeEventHandler, ReactNode } from 'react';
 
+// 48px tall, 16px text (so iPhone never zooms in), a soft inner shadow at rest and a wide green
+// focus halo, like the fields in banking and booking apps.
 export const inputClass =
-  'block w-full min-h-12 rounded-md border bg-white px-3.5 py-2.5 text-base text-ink placeholder:text-muted/70 transition-colors focus:outline-none focus:ring-2 focus:ring-accent-600/40 disabled:bg-subtle disabled:text-muted';
-export const borderClass = (invalid: boolean) => (invalid ? 'border-danger-700' : 'border-line-input focus:border-accent-600');
+  'block w-full min-h-12 rounded-[10px] border bg-white px-3.5 py-2.5 text-base text-ink shadow-[inset_0_1px_2px_rgb(31_27_22/0.06)] placeholder:text-muted/70 transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-4 disabled:bg-subtle disabled:text-muted';
+export const borderClass = (invalid: boolean) =>
+  invalid ? 'border-danger-700 bg-danger-50/40 focus:ring-danger-700/15' : 'border-line-strong hover:border-line-input focus:border-brand-600 focus:ring-brand-600/15';
 
 export type FieldErrors = Record<string, string | undefined> | undefined;
 
@@ -30,13 +33,16 @@ function describedBy(fid: string, hint: boolean, error: boolean) {
 
 export function FieldLabel({ htmlFor, label, required, hideOptional }: { htmlFor: string; label: string; required?: boolean; hideOptional?: boolean }) {
   return (
-    <label htmlFor={htmlFor} className="text-sm font-medium text-ink">
-      {label}
-      {hideOptional ? null : required ? (
-        <span className="font-normal text-muted"> (required)</span>
-      ) : (
-        <span className="font-normal text-muted"> (optional)</span>
-      )}
+    <label htmlFor={htmlFor} className="flex items-baseline justify-between gap-2 text-sm font-semibold text-ink">
+      <span>
+        {label}
+        {required && !hideOptional && (
+          <span aria-hidden="true" className="ml-0.5 text-accent-600">
+            *
+          </span>
+        )}
+      </span>
+      {!hideOptional && !required && <span className="text-xs font-normal text-muted">Optional</span>}
     </label>
   );
 }
@@ -50,7 +56,10 @@ export function FieldHelp({ name: fid, hint, error }: { name: string; hint?: Rea
         </p>
       )}
       {error && (
-        <p id={`${fid}-error`} className="mt-1.5 text-sm font-medium text-danger-700">
+        <p id={`${fid}-error`} className="mt-1.5 flex items-start gap-1.5 text-sm font-medium text-danger-700">
+          <svg aria-hidden="true" viewBox="0 0 16 16" className="mt-0.5 h-4 w-4 shrink-0" fill="currentColor">
+            <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm-.75 3.25h1.5v4.5h-1.5zm.75 7.25a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
+          </svg>
           {error}
         </p>
       )}
@@ -207,7 +216,7 @@ export function SelectField({
         disabled={disabled}
         aria-invalid={!!error}
         aria-describedby={describedBy(fid, !!hint, !!error)}
-        className={`${inputClass} ${borderClass(!!error)} mt-1.5 appearance-none bg-[url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2716%27%20height%3D%2716%27%20fill%3D%27none%27%3E%3Cpath%20d%3D%27M4%206l4%204%204-4%27%20stroke%3D%27%235b6b80%27%20stroke-width%3D%271.75%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3C%2Fsvg%3E")] bg-[length:16px_16px] bg-[position:right_14px_center] bg-no-repeat pr-10`}
+        className={`${inputClass} ${borderClass(!!error)} mt-1.5 appearance-none bg-[url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2716%27%20height%3D%2716%27%20fill%3D%27none%27%3E%3Cpath%20d%3D%27M4%206l4%204%204-4%27%20stroke%3D%27%236e655b%27%20stroke-width%3D%271.75%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3C%2Fsvg%3E")] bg-[length:16px_16px] bg-[position:right_14px_center] bg-no-repeat pr-10`}
       >
         {placeholder && (
           <option value="" disabled={required}>
@@ -249,7 +258,7 @@ export function CheckboxField({
           {...(checked !== undefined ? { checked, onChange } : { defaultChecked })}
           disabled={disabled}
           aria-describedby={describedBy(fid, !!hint, !!error)}
-          className="h-6 w-6 shrink-0 rounded border-line-input accent-brand-700"
+          className="h-5 w-5 shrink-0 rounded-[5px] border-line-input accent-brand-700"
         />
         <label htmlFor={fid} className="font-medium text-ink">
           {label}

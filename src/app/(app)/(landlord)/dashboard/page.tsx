@@ -87,7 +87,7 @@ export default function DashboardPage() {
       <div className="grid gap-8">
         {overview.error && <Alert title="Couldn't load the overview">{overview.error}</Alert>}
         <section aria-label="This month">
-          <ul className={`grid gap-4 sm:grid-cols-2 ${onlyOwn ? '' : 'xl:grid-cols-4'}`}>
+          <ul className={`grid grid-cols-2 gap-3 sm:gap-4 ${onlyOwn ? '' : 'xl:grid-cols-4'}`}>
             {!onlyOwn && (
               <>
                 <StatCard
