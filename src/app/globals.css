@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+/*
+  Rentals design tokens. Its own look, separate from the Vachi portal: a deep evergreen for
+  structure and actions, warm clay for links and focus, warm stone neutrals, and green kept for
+  "paid / done". Class names follow the same scale (brand-*, accent-*) the shared UI kit uses.
+*/
+
+@theme {
+  --color-brand-950: #0c2219;
+  --color-brand-900: #133326;
+  --color-brand-800: #1a4533;
+  --color-brand-700: #215a42; /* primary: buttons, active nav */
+  --color-brand-600: #2c7054;
+  --color-brand-100: #d9ebe1;
+  --color-brand-50: #eef6f1;
+
+  --color-accent-700: #9a4320; /* links, eyebrow text (AA on white) */
+  --color-accent-600: #b4542b;
+  --color-accent-500: #cf6a3d;
+  --color-accent-100: #f7e3d8;
+  --color-accent-50: #fcf2ec;
+
+  --color-green-700: #2f7a1f;
+  --color-green-600: #3d8f2a;
+  --color-green-50: #ecf6e8;
+
+  --color-amber-800: #8a4b00;
+  --color-amber-50: #fff6e5;
+
+  /* Warm stone neutrals */
+  --color-ink: #1f1b16;
+  --color-ink-2: #4a4239;
+  --color-muted: #6e655b;
+  --color-line: #e8e2d9;
+  --color-line-strong: #d3cabd;
+  --color-canvas: #ffffff;
+  --color-subtle: #faf7f2;
+  --color-line-input: #8c8274;
+
+  --color-danger-700: #b42318;
+  --color-danger-50: #fef3f2;
+
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-inter), system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-panel: 0 1px 2px rgb(31 27 22 / 0.05), 0 10px 28px -14px rgb(31 27 22 / 0.18);
+  --shadow-float: 0 24px 60px -24px rgb(31 27 22 / 0.35);
+
+  --breakpoint-3xl: 1920px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 5rem;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent-600);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+  ::selection {
+    background: var(--color-accent-100);
+    color: var(--color-brand-900);
+  }
+  /* Tailwind v4 leaves buttons on the default cursor. */
+  button:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .container-page {
+    width: 100%;
+    max-width: 1280px;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .container-page {
+      padding-inline: 2rem;
+    }
+  }
+  @media (min-width: 1920px) {
+    .container-page {
+      max-width: 1440px;
+    }
+  }
+
+  .t-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-accent-700);
+  }
+  .t-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .link {
+    color: var(--color-accent-700);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  .link:hover {
+    color: var(--color-brand-700);
+  }
+
+  .grid-bg {
+    background:
+      radial-gradient(circle at 15% 10%, rgb(33 90 66 / 0.10), transparent 45%),
+      radial-gradient(circle at 85% 90%, rgb(207 106 61 / 0.10), transparent 40%),
+      var(--color-subtle);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

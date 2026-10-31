@@ -1,0 +1,48 @@
+'use client';
+
+import { useState } from 'react';
+import { api } from '@/lib/client/api';
+import { Button } from '@/components/ui/Button';
+import { TextField } from '@/components/ui/fields';
+import { Alert } from '@/components/ui/ui';
+
+export function ForgotForm() {
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const email = String(new FormData(e.currentTarget).get('email') ?? '').trim();
+    setBusy(true);
+    setError(null);
+    const result = await api('/api/auth/forgot-password', { body: { email } });
+    setBusy(false);
+    // Unknown addresses get the same answer, so the form can't be used to find out who works here.
+    if (result.status === 429 || result.status === 400) {
+      setError(result.message);
+      return;
+    }
+    setSentTo(email);
+  }
+
+  if (sentTo) {
+    return (
+      <div className="mt-6">
+        <Alert tone="success" title="Check your email">
+          If <span className="font-medium">{sentTo}</span> has a Rentals account, a reset link is on its way. It works once and expires in an hour.
+        </Alert>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-6 grid gap-5">
+      {error && <Alert>{error}</Alert>}
+      <TextField name="email" label="Email" type="email" required hideOptional autoComplete="email" inputMode="email" />
+      <Button type="submit" size="lg" busy={busy} busyLabel="Sending" className="w-full">
+        Send reset link
+      </Button>
+    </form>
+  );
+}
