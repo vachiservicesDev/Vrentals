@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, formValues, useAction, useResource } from '@/lib/client/api';
 import { PAYMENT_METHODS, REMINDER_KINDS, REMINDER_REPEATS, REPAIR_STATUSES, REPAIR_URGENCIES, labelFrom, statusOf } from '@/lib/status';
 import { Button, buttonClass } from '@/components/ui/Button';
 import { receiptText, reminderText, smsLink } from '@/lib/rentals/messages';
-import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
+import { CheckboxField, FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
 import { MoneyPanel } from '@/components/money/MoneyPanel';
 import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
-import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, When, formatMoney } from '@/components/ui/ui';
+import { ApplicationsPanel, type Application } from '@/components/leasing/ApplicationsPanel';
+import { ListingPanel } from '@/components/leasing/ListingPanel';
+import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatMoney } from '@/components/ui/ui';
 
 interface Property {
   id: string;
@@ -40,6 +42,14 @@ interface Lease {
   lateFee: string | null;
   securityDeposit: string | null;
   status: string;
+  agreement: { id: string; status: 'draft' | 'sent' | 'signed' } | null;
+}
+interface Prefill {
+  tenantName: string;
+  tenantEmail: string;
+  tenantPhone: string;
+  startDate: string;
+  monthlyRent: string;
 }
 interface Charge {
   id: string;
@@ -110,6 +120,8 @@ export default function RentalHomePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { data, error, loading, reload } = useResource<Detail>(`/api/properties/${params.id}`);
+  const [prefill, setPrefill] = useState<Prefill | null>(null);
+  const newLease = useRef<HTMLDivElement>(null);
   const back = { href: '/dashboard', label: 'Dashboard' };
 
   if (loading && !data) return <Loading />;
@@ -130,7 +142,22 @@ export default function RentalHomePage() {
     <>
       <PageHeader back={back} eyebrow="Rental home" title={property.name} lead={address} actions={lease ? <Chip tone="live">Occupied</Chip> : <Chip tone="new">Vacant</Chip>} />
       <div className="grid gap-8">
-        {lease ? <LeasePanel lease={lease} onChange={reload} /> : <NewLeasePanel propertyId={property.id} onChange={reload} />}
+        {lease ? (
+          <LeasePanel lease={lease} landlordName={landlordName} onChange={reload} />
+        ) : (
+          <div ref={newLease}>
+            <NewLeasePanel key={prefill?.tenantEmail ?? 'blank'} propertyId={property.id} prefill={prefill} onChange={reload} />
+          </div>
+        )}
+        <ListingPanel propertyId={property.id} defaultRent={lease?.monthlyRent ?? past[0]?.monthlyRent ?? null} vacant={!lease} />
+        <ApplicationsPanel
+          propertyId={property.id}
+          canStartLease={!lease}
+          onStartLease={(a: Application, askingRent) => {
+            setPrefill({ tenantName: a.fullName, tenantEmail: a.email, tenantPhone: a.phone, startDate: a.moveInDate ?? '', monthlyRent: askingRent ? String(Number(askingRent)) : '' });
+            newLease.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
         {lease && <RentPanel lease={lease} home={property.name} landlordName={landlordName} charges={charges.filter((c) => c.leaseId === lease.id)} onChange={reload} />}
         <RepairsPanel propertyId={property.id} repairs={repairs} onChange={reload} />
         <RemindersPanel propertyId={property.id} reminders={reminders} onChange={reload} />
@@ -158,7 +185,12 @@ export default function RentalHomePage() {
                           {owed > 0 && <span className="font-semibold text-danger-700"> · {formatMoney(owed)} unpaid</span>}
                         </span>
                       </summary>
-                      <div className="border-t border-line p-4">
+                      <div className="grid gap-4 border-t border-line p-4">
+                        {l.agreement && (
+                          <p>
+                            <TextLink href={`/agreements/${l.agreement.id}`}>{l.agreement.status === 'signed' ? 'Signed lease' : 'Written lease (not fully signed)'}</TextLink>
+                          </p>
+                        )}
                         {ledger.length === 0 ? (
                           <p className="text-ink-2">No rent was recorded for this lease.</p>
                         ) : (
@@ -188,7 +220,7 @@ export default function RentalHomePage() {
   );
 }
 
-function LeasePanel({ lease, onChange }: { lease: Lease; onChange: () => void }) {
+function LeasePanel({ lease, landlordName, onChange }: { lease: Lease; landlordName: string | null; onChange: () => void }) {
   const action = useAction();
   const [link, setLink] = useState<string | null>(null);
 
@@ -250,12 +282,101 @@ function LeasePanel({ lease, onChange }: { lease: Lease; onChange: () => void })
             End lease
           </Button>
         </div>
+        <AgreementSection lease={lease} landlordName={landlordName} onChange={onChange} />
       </div>
     </Panel>
   );
 }
 
-function NewLeasePanel({ propertyId, onChange }: { propertyId: string; onChange: () => void }) {
+const AGREEMENT_STATUS = {
+  draft: { label: 'Draft: read it and sign', tone: 'muted' },
+  sent: { label: 'Signed by you, waiting for the tenant', tone: 'warning' },
+  signed: { label: 'Signed by both', tone: 'live' },
+} as const;
+
+/**
+ * The written lease: filled in from this lease's terms plus a few extras, then signed in the app by
+ * the landlord and the tenant. The signed copy stays with the home and this lease's term.
+ */
+function AgreementSection({ lease, landlordName, onChange }: { lease: Lease; landlordName: string | null; onChange: () => void }) {
+  const action = useAction();
+  const terms = useResource<{ agreement: { terms?: Record<string, unknown> } }>(lease.agreement?.status === 'draft' ? `/api/agreements/${lease.agreement.id}` : null);
+  const a = lease.agreement;
+  const t = (terms.data?.agreement.terms ?? {}) as Record<string, string | boolean | undefined>;
+  const str = (k: string) => (typeof t[k] === 'string' ? (t[k] as string) : '');
+
+  async function prepare(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const body: Record<string, unknown> = Object.fromEntries([...fd.entries()].map(([k, v]) => [k, String(v).trim()]));
+    body.builtBefore1978 = fd.get('builtBefore1978') === 'on';
+    const result = await action.run<{ agreement: { id: string } }>('prepare', `/api/leases/${lease.id}/agreement`, { body });
+    if (result.ok && result.data) window.location.href = `/agreements/${result.data.agreement.id}`;
+  }
+
+  return (
+    <section className="grid gap-4 border-t border-line pt-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-display text-lg font-semibold text-ink">Written lease</h3>
+        {a && <Chip tone={AGREEMENT_STATUS[a.status].tone}>{AGREEMENT_STATUS[a.status].label}</Chip>}
+      </div>
+      {a ? (
+        <p className="flex flex-wrap gap-3">
+          <a href={`/agreements/${a.id}`} className={buttonClass(a.status === 'draft' ? 'primary' : 'secondary')}>
+            {a.status === 'draft' ? 'Review and sign' : a.status === 'signed' ? 'View signed lease' : 'View lease'}
+          </a>
+        </p>
+      ) : (
+        <p className="text-ink-2">Prepare a Connecticut lease from the terms above, sign it here, and your tenant signs it from their account. The signed copy is saved with this home.</p>
+      )}
+      {(!a || a.status === 'draft') && !(a && terms.loading) && (
+        <details className="rounded-lg border border-line" open={!a}>
+          <summary className="flex min-h-11 cursor-pointer items-center px-4 font-semibold text-brand-700">{a ? 'Change the lease terms' : 'Prepare the lease'}</summary>
+          <form onSubmit={prepare} noValidate className="grid gap-5 border-t border-line p-4">
+            <FormStatus error={action.error} fieldErrors={action.fieldErrors} labels={{ landlordName: 'Landlord name', landlordAddress: 'Address for notices' }} />
+            <p className="text-sm text-muted">Rent, due day, late fee, deposit and dates come from the lease above. To change those, end and re-add the lease before preparing.</p>
+            <FieldRow>
+              <TextField name="landlordName" label="Landlord name" required defaultValue={str('landlordName') || landlordName || ''} hint="You, or your LLC. You'll sign with this exact name." errors={action.fieldErrors} id={`f-a-name-${lease.id}`} />
+              <TextField name="landlordAddress" label="Address for notices" required defaultValue={str('landlordAddress')} hint="Where the tenant sends written notices." errors={action.fieldErrors} id={`f-a-addr-${lease.id}`} />
+            </FieldRow>
+            <TextField name="occupants" label="Other people who will live there" defaultValue={str('occupants')} hint="Names of other adults and children, if any." errors={action.fieldErrors} id={`f-a-occ-${lease.id}`} />
+            <FieldRow>
+              <TextField name="utilitiesTenant" label="Tenant pays for" defaultValue={str('utilitiesTenant') || 'electricity, gas, internet and cable'} errors={action.fieldErrors} id={`f-a-ut-${lease.id}`} />
+              <TextField name="utilitiesLandlord" label="Landlord pays for" defaultValue={str('utilitiesLandlord') || 'water, sewer and trash'} errors={action.fieldErrors} id={`f-a-ul-${lease.id}`} />
+            </FieldRow>
+            <FieldRow>
+              <TextField name="parking" label="Parking" defaultValue={str('parking')} hint='Like "Two spaces, #14 and #15".' errors={action.fieldErrors} id={`f-a-park-${lease.id}`} />
+              <TextField name="pets" label="Pets" defaultValue={str('pets')} hint="Leave empty for no pets without your consent." errors={action.fieldErrors} id={`f-a-pets-${lease.id}`} />
+            </FieldRow>
+            <FieldRow>
+              <SelectField
+                name="smoking"
+                label="Smoking"
+                options={[
+                  { value: 'not_allowed', label: 'Not allowed anywhere' },
+                  { value: 'outside_only', label: 'Outside only' },
+                  { value: 'allowed', label: 'Allowed' },
+                ]}
+                defaultValue={str('smoking') || 'not_allowed'}
+                id={`f-a-smoke-${lease.id}`}
+              />
+              <TextField name="rentPaymentMethod" label="How rent is paid" defaultValue={str('rentPaymentMethod')} hint="Like “Zelle or bank payment in the Rentals app”." errors={action.fieldErrors} id={`f-a-pay-${lease.id}`} />
+            </FieldRow>
+            <CheckboxField name="builtBefore1978" label="The home was built before 1978 (adds the lead paint clause)" hint="Before your tenant signs, give them the EPA lead pamphlet and the federal lead disclosure form, signed by both of you. Upload the signed form under Documents." defaultChecked={t.builtBefore1978 === true} id={`f-a-lead-${lease.id}`} />
+            <TextAreaField name="extraTerms" label="Additional terms" rows={4} defaultValue={str('extraTerms')} hint="Anything else you both agree to, like snow removal or lawn care." errors={action.fieldErrors} id={`f-a-extra-${lease.id}`} />
+            <div>
+              <Button type="submit" busy={action.busy === 'prepare'} busyLabel="Preparing…">
+                {a ? 'Update the lease' : 'Prepare the lease'}
+              </Button>
+            </div>
+          </form>
+        </details>
+      )}
+    </section>
+  );
+}
+
+function NewLeasePanel({ propertyId, prefill, onChange }: { propertyId: string; prefill: Prefill | null; onChange: () => void }) {
   const action = useAction();
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
@@ -265,25 +386,26 @@ function NewLeasePanel({ propertyId, onChange }: { propertyId: string; onChange:
   }
 
   return (
-    <Panel title="Add the tenant and lease" description="This home is vacant. Add the lease once it's signed, then invite the tenant so they can see their rent and report repairs.">
+    <Panel title="Add the tenant and lease" description="This home is vacant. Add the tenant and the lease terms, then prepare the written lease for both of you to sign and invite the tenant so they can sign, see their rent and report repairs.">
       <form onSubmit={save} noValidate className="grid gap-5">
+        {prefill && <Alert tone="info">Filled in from {prefill.tenantName}&apos;s application. Check everything before saving.</Alert>}
         <FormStatus
           error={action.error}
           fieldErrors={action.fieldErrors}
           labels={{ tenantName: 'Tenant name', tenantEmail: 'Tenant email', startDate: 'Lease starts', endDate: 'Lease ends', monthlyRent: 'Monthly rent', dueDay: 'Rent due day' }}
         />
         <FieldRow cols={3}>
-          <TextField name="tenantName" label="Tenant name" required errors={action.fieldErrors} />
-          <TextField name="tenantEmail" label="Tenant email" type="email" required errors={action.fieldErrors} />
-          <TextField name="tenantPhone" label="Tenant phone" type="tel" errors={action.fieldErrors} />
+          <TextField name="tenantName" label="Tenant name" required defaultValue={prefill?.tenantName} errors={action.fieldErrors} />
+          <TextField name="tenantEmail" label="Tenant email" type="email" required defaultValue={prefill?.tenantEmail} errors={action.fieldErrors} />
+          <TextField name="tenantPhone" label="Tenant phone" type="tel" defaultValue={prefill?.tenantPhone} errors={action.fieldErrors} />
         </FieldRow>
         <FieldRow cols={3}>
-          <TextField name="monthlyRent" label="Monthly rent ($)" type="number" inputMode="decimal" min={0} step="0.01" required errors={action.fieldErrors} />
+          <TextField name="monthlyRent" label="Monthly rent ($)" type="number" inputMode="decimal" min={0} step="0.01" required defaultValue={prefill?.monthlyRent} errors={action.fieldErrors} />
           <TextField name="dueDay" label="Rent due day" type="number" min={1} max={28} defaultValue={1} required hint="Day of the month, 1 to 28." errors={action.fieldErrors} />
           <TextField name="graceDays" label="Grace period (days)" type="number" min={0} max={31} defaultValue={9} hint="Connecticut doesn't allow a late fee until 9 days after the due date." errors={action.fieldErrors} />
         </FieldRow>
         <FieldRow cols={3}>
-          <TextField name="startDate" label="Lease starts" type="date" required errors={action.fieldErrors} />
+          <TextField name="startDate" label="Lease starts" type="date" required defaultValue={prefill?.startDate} errors={action.fieldErrors} />
           <TextField name="endDate" label="Lease ends" type="date" hint="Leave empty for month to month." errors={action.fieldErrors} />
           <TextField name="securityDeposit" label="Security deposit ($)" type="number" inputMode="decimal" min={0} step="0.01" hint="Connecticut caps this at 2 months' rent (1 month if the tenant is 62 or older)." errors={action.fieldErrors} />
         </FieldRow>

@@ -13,6 +13,7 @@ interface Rental {
   landlord: { name: string | null; email: string; phone: string | null } | null;
   charges: { id: string; period: string; dueDate: string; amount: string; paidAmount: string; paidOn: string | null; status: string; processing: string | null }[];
   onlinePayments: boolean;
+  agreement: { id: string; status: 'sent' | 'signed' } | null;
   repairs: { id: string; title: string; description: string | null; urgency: string; status: string; appointmentAt: string | null; vendorName: string | null; createdAt: string; completedAt: string | null }[];
 }
 
@@ -61,6 +62,11 @@ export default function TenantRentalPage() {
     <>
       <PageHeader eyebrow="Your rental" title={home.name} lead={[home.address, home.city, `${home.state} ${home.zip ?? ''}`.trim()].filter(Boolean).join(', ')} />
       <div className="grid gap-8">
+        {rental.agreement?.status === 'sent' && (
+          <Alert tone="info" title="Your lease is ready to sign">
+            Your landlord signed your written lease. <TextLink href={`/agreements/${rental.agreement.id}`}>Read and sign it</TextLink>.
+          </Alert>
+        )}
         <Panel
           title="Rent"
           actions={owedTotal > 0 ? <Chip tone={owed.some((c) => c.status === 'late') ? 'danger' : 'new'}>{formatMoney(owedTotal)} due</Chip> : latest ? <Chip tone="live">All paid</Chip> : undefined}
@@ -167,7 +173,10 @@ export default function TenantRentalPage() {
           )}
         </section>
 
-        <Panel title="Your lease">
+        <Panel
+          title="Your lease"
+          actions={rental.agreement ? <Chip tone={rental.agreement.status === 'signed' ? 'live' : 'warning'}>{rental.agreement.status === 'signed' ? 'Signed' : 'Needs your signature'}</Chip> : undefined}
+        >
           <DetailList
             items={[
               { label: 'Monthly rent', value: formatMoney(lease.monthlyRent) },
@@ -178,6 +187,11 @@ export default function TenantRentalPage() {
               { label: 'Security deposit', value: formatMoney(lease.securityDeposit) },
             ]}
           />
+          {rental.agreement && (
+            <p className="mt-6">
+              <TextLink href={`/agreements/${rental.agreement.id}`}>{rental.agreement.status === 'signed' ? 'View your signed lease' : 'Read and sign your lease'}</TextLink>
+            </p>
+          )}
           {rental.landlord && (
             <div className="mt-6 border-t border-line pt-6">
               <p className="font-medium text-ink">Your landlord{rental.landlord.name ? `: ${rental.landlord.name}` : ''}</p>

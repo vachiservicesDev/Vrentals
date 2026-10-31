@@ -6,6 +6,7 @@ import { removeFile } from '@/lib/storage';
 import { requireLandlord } from '@/lib/auth/guards';
 import { todayEastern } from '@/lib/dates';
 import { ownedProperty } from '@/lib/rentals/access';
+import { liveAgreements } from '@/lib/rentals/agreements';
 import { pendingPayments } from '@/lib/rentals/payments';
 import { chargeStatus } from '@/lib/rentals/rent';
 import { propertySchema, propertyValues } from '@/lib/rentals/schemas';
@@ -27,13 +28,14 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     ? await db.select().from(rentCharges).where(inArray(rentCharges.leaseId, leaseRows.map((l) => l.id))).orderBy(desc(rentCharges.period))
     : [];
 
+  const agreements = await liveAgreements(leaseRows.map((l) => l.id));
   const processing = new Map((await pendingPayments(charges.map((c) => c.id))).map((p) => [p.chargeId, p.amount]));
   const today = todayEastern();
   const grace = new Map(leaseRows.map((l) => [l.id, l.graceDays]));
   return NextResponse.json({
     property,
     landlordName: gate.account.fullName,
-    leases: leaseRows,
+    leases: leaseRows.map((l) => ({ ...l, agreement: agreements.find((a) => a.leaseId === l.id) ?? null })),
     charges: charges.map((c) => ({ ...c, status: chargeStatus(c, grace.get(c.leaseId) ?? 0, today), processing: processing.get(c.id) ?? null })),
     repairs,
     reminders: reminderRows,

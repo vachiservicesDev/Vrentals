@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { documents, leases, properties, reminders, transactions } from '@/db/schema';
+import { applications, documents, leases, properties, reminders, showingSlots, transactions } from '@/db/schema';
 
 /** A property, only when it belongs to `ownerId`. Every landlord route goes through this. */
 export async function ownedProperty(ownerId: string, propertyId: string) {
@@ -71,4 +71,28 @@ export async function ownedDocument(ownerId: string, id: string) {
     .where(and(eq(documents.id, id), eq(properties.ownerId, ownerId)))
     .limit(1);
   return row?.document ?? null;
+}
+
+/** A rental application, only when its home belongs to the caller. */
+export async function ownedApplication(ownerId: string, id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await db
+    .select({ application: applications, property: properties })
+    .from(applications)
+    .innerJoin(properties, eq(properties.id, applications.propertyId))
+    .where(and(eq(applications.id, id), eq(properties.ownerId, ownerId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** A showing time, only when its home belongs to the caller. */
+export async function ownedSlot(ownerId: string, id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await db
+    .select({ slot: showingSlots })
+    .from(showingSlots)
+    .innerJoin(properties, eq(properties.id, showingSlots.propertyId))
+    .where(and(eq(showingSlots.id, id), eq(properties.ownerId, ownerId)))
+    .limit(1);
+  return row?.slot ?? null;
 }

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { type AnyPgColumn, bigint, boolean, date, decimal, integer, pgSchema, text, timestamp, unique, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, bigint, boolean, date, decimal, integer, jsonb, pgSchema, text, timestamp, unique, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 /**
  * Everything lives in its own Postgres schema, `rentals`, so it never mixes with other apps'
@@ -242,3 +242,110 @@ export const notifications = rentals.table('notifications', {
   readAt: timestamp('read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * A home offered for rent. Its id is the public link (/rent/<id>) that prospective tenants use to
+ * see the home, book a showing and apply. Turning it off hides the page and stops new bookings.
+ */
+export const listings = rentals.table('listings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  propertyId: uuid('property_id')
+    .notNull()
+    .unique()
+    .references(() => properties.id, { onDelete: 'cascade' }),
+  active: boolean('active').notNull().default(true),
+  headline: varchar('headline', { length: 150 }),
+  description: text('description'),
+  askingRent: decimal('asking_rent', { precision: 10, scale: 2 }).notNull(),
+  securityDeposit: decimal('security_deposit', { precision: 10, scale: 2 }),
+  availableFrom: date('available_from'),
+  bedrooms: decimal('bedrooms', { precision: 3, scale: 1 }),
+  bathrooms: decimal('bathrooms', { precision: 3, scale: 1 }),
+  squareFeet: integer('square_feet'),
+  petPolicy: varchar('pet_policy', { length: 200 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** A time the landlord can show the home. One visitor per time. */
+export const showingSlots = rentals.table('showing_slots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  propertyId: uuid('property_id')
+    .notNull()
+    .references(() => properties.id, { onDelete: 'cascade' }),
+  startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+  minutes: integer('minutes').notNull().default(30),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const showingBookings = rentals.table(
+  'showing_bookings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    slotId: uuid('slot_id')
+      .notNull()
+      .references(() => showingSlots.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 200 }).notNull(),
+    email: varchar('email', { length: 255 }).notNull(),
+    phone: varchar('phone', { length: 30 }),
+    note: text('note'),
+    status: varchar('status', { length: 10 }).notNull().default('booked'), // 'booked' | 'cancelled'
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // A time can only be booked once (a cancelled booking frees it again).
+  (t) => ({ oneBooking: uniqueIndex('showing_bookings_one_per_slot_idx').on(t.slotId).where(sql`${t.status} = 'booked'`) }),
+);
+
+/**
+ * A rental application from the public link. It asks only what a landlord may lawfully weigh
+ * (no SSN, birth date, or protected traits); a credit and background check comes later through a
+ * screening company, which collects those details itself.
+ */
+export const applications = rentals.table('applications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  propertyId: uuid('property_id')
+    .notNull()
+    .references(() => properties.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 10 }).notNull().default('new'), // 'new' | 'reviewing' | 'approved' | 'declined'
+  fullName: varchar('full_name', { length: 200 }).notNull(),
+  email: varchar('email', { length: 255 }).notNull(),
+  phone: varchar('phone', { length: 30 }).notNull(),
+  moveInDate: date('move_in_date'),
+  // Everything else the applicant told us (address history, work, income, references, household).
+  answers: jsonb('answers').notNull(),
+  // The applicant's typed signature on the certification, and when.
+  signedName: varchar('signed_name', { length: 200 }).notNull(),
+  signedAt: timestamp('signed_at', { withTimezone: true }).defaultNow().notNull(),
+  landlordNotes: text('landlord_notes'), // landlord-only
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * A written lease agreement for a lease: the full text, fixed once the landlord signs (its SHA-256
+ * is kept so any change would show), and each side's electronic signature with when and from where.
+ */
+export const leaseAgreements = rentals.table(
+  'lease_agreements',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    leaseId: uuid('lease_id')
+      .notNull()
+      .references(() => leases.id, { onDelete: 'cascade' }),
+    status: varchar('status', { length: 10 }).notNull().default('draft'), // 'draft' | 'sent' | 'signed' | 'void'
+    terms: jsonb('terms').notNull(), // the extra terms the landlord chose
+    body: text('body').notNull(),
+    bodySha256: varchar('body_sha256', { length: 64 }).notNull(),
+    landlordName: varchar('landlord_name', { length: 200 }),
+    landlordSignedAt: timestamp('landlord_signed_at', { withTimezone: true }),
+    landlordSignedIp: varchar('landlord_signed_ip', { length: 64 }),
+    tenantName: varchar('tenant_name', { length: 200 }),
+    tenantSignedAt: timestamp('tenant_signed_at', { withTimezone: true }),
+    tenantSignedIp: varchar('tenant_signed_ip', { length: 64 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // One live agreement per lease; a voided one can be replaced.
+  (t) => ({ oneLive: uniqueIndex('lease_agreements_one_live_idx').on(t.leaseId).where(sql`${t.status} <> 'void'`) }),
+);
