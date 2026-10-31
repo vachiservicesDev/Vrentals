@@ -7,6 +7,7 @@ import { PAYMENT_METHODS, REMINDER_KINDS, REMINDER_REPEATS, REPAIR_STATUSES, REP
 import { Button } from '@/components/ui/Button';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
+import { MoneyPanel } from '@/components/money/MoneyPanel';
 import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, When, formatMoney } from '@/components/ui/ui';
 
 interface Property {
@@ -19,6 +20,9 @@ interface Property {
   hoaName: string | null;
   hoaContact: string | null;
   notes: string | null;
+  purchasePrice: string | null;
+  landValue: string | null;
+  placedInService: string | null;
 }
 interface Lease {
   id: string;
@@ -83,6 +87,14 @@ interface Detail {
 const monthLabel = (period: string) => new Date(`${period}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
 
+/** Changes whenever a repair's cost or status, or a bill's due date, changes: each can add an expense. */
+function moneyKey(repairs: Repair[], reminders: Reminder[]) {
+  const text = [...repairs.map((r) => `${r.id}${r.status}${r.cost}`), ...reminders.map((r) => `${r.id}${r.dueDate}${r.doneAt}`)].join('|');
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  return hash.toString(36);
+}
+
 /** "2026-11-04T14:30:00.000Z" → the value a datetime-local input expects, in the viewer's time. */
 function toLocalInput(iso: string | null) {
   if (!iso) return '';
@@ -118,6 +130,11 @@ export default function RentalHomePage() {
         {lease && <RentPanel lease={lease} charges={charges.filter((c) => c.leaseId === lease.id)} onChange={reload} />}
         <RepairsPanel propertyId={property.id} repairs={repairs} onChange={reload} />
         <RemindersPanel propertyId={property.id} reminders={reminders} onChange={reload} />
+        <MoneyPanel
+          propertyId={property.id}
+          // Paying a bill or fixing a repair with a cost adds an expense, so refresh with them.
+          reloadKey={moneyKey(repairs, reminders)}
+        />
         <HomePanel property={property} onChange={reload} onDeleted={() => router.push('/dashboard')} />
         {past.length > 0 && (
           <section>
@@ -506,7 +523,7 @@ function RemindersPanel({ propertyId, reminders, onChange }: { propertyId: strin
 
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <Panel id="reminders" title="Insurance, HOA and bills" description="Renewals and dues for this home. Repeating ones roll to the next date when you mark them paid.">
+    <Panel id="reminders" title="Insurance, HOA and bills" description="Renewals and dues for this home. Marking one paid records it under Money; repeating ones then roll to the next date.">
       <div className="grid gap-6">
         {rowError && <Alert>{rowError}</Alert>}
         {active.length === 0 ? (
@@ -584,7 +601,9 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     // Send empty values too, so clearing a field sticks.
-    const body = Object.fromEntries(['name', 'address', 'city', 'state', 'hoaName', 'hoaContact', 'notes'].map((k) => [k, String(fd.get(k) ?? '').trim()]));
+    const body = Object.fromEntries(
+      ['name', 'address', 'city', 'state', 'hoaName', 'hoaContact', 'notes', 'purchasePrice', 'landValue', 'placedInService'].map((k) => [k, String(fd.get(k) ?? '').trim()]),
+    );
     const zip = String(fd.get('zip') ?? '').trim();
     const result = await action.run('save', `/api/properties/${property.id}`, { method: 'PATCH', body: zip ? { ...body, zip } : body }, 'Home details saved.');
     if (result.ok) onChange();
@@ -597,7 +616,7 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
   }
 
   return (
-    <Panel title="Home details and HOA">
+    <Panel title="Home details, HOA and depreciation">
       <form onSubmit={save} noValidate className="grid gap-5">
         <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ name: 'Name', address: 'Street address', zip: 'ZIP code' }} />
         <FieldRow>
@@ -614,6 +633,15 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
           <TextAreaField name="hoaContact" label="HOA contact" rows={2} defaultValue={property.hoaContact} errors={action.fieldErrors} id="f-home-hoaContact" />
         </FieldRow>
         <TextAreaField name="notes" label="Notes" rows={3} defaultValue={property.notes} hint="Appliances, paint colors, alarm codes, anything worth keeping." errors={action.fieldErrors} id="f-home-notes" />
+        <fieldset className="grid gap-4 rounded-lg border border-line p-4">
+          <legend className="px-1 font-semibold text-ink">For depreciation</legend>
+          <p className="text-sm text-ink-2">The IRS lets you deduct the building&apos;s cost over 27.5 years. Fill these in once and the yearly report estimates it for you. Your closing statement and town assessment have the numbers.</p>
+          <FieldRow cols={3}>
+            <TextField name="purchasePrice" label="Purchase price ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.purchasePrice} hint="Plus closing costs you paid." errors={action.fieldErrors} id="f-home-purchasePrice" />
+            <TextField name="landValue" label="Land value ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.landValue} hint="Land doesn't depreciate. The town assessment splits land and building." errors={action.fieldErrors} id="f-home-landValue" />
+            <TextField name="placedInService" label="First ready to rent" type="date" defaultValue={property.placedInService} hint="The day it was first available for rent." errors={action.fieldErrors} id="f-home-placedInService" />
+          </FieldRow>
+        </fieldset>
         <div className="flex flex-wrap gap-3">
           <Button type="submit" busy={action.busy === 'save'} busyLabel="Saving…">
             Save details

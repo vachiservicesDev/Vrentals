@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { leases, properties, repairRequests } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
 import { notify } from '@/lib/notify';
+import { syncRepairExpense } from '@/lib/rentals/ledger';
 import { dec, repairUpdateSchema } from '@/lib/rentals/schemas';
 
 const visitTime = (iso: Date) =>
@@ -49,6 +50,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     })
     .where(eq(repairRequests.id, before.id))
     .returning();
+
+  await syncRepairExpense(repair);
 
   // The tenant on the home's current lease hears about a new visit time and the finished repair.
   const [lease] = await db

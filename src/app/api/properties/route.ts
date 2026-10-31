@@ -3,7 +3,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { leases, properties } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
-import { propertySchema } from '@/lib/rentals/schemas';
+import { propertySchema, propertyValues } from '@/lib/rentals/schemas';
 
 /** The caller's own rental homes, each with its current tenant (if any). */
 export async function GET() {
@@ -31,6 +31,6 @@ export async function POST(request: NextRequest) {
   const body = propertySchema.safeParse(await request.json());
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });
 
-  const [property] = await db.insert(properties).values({ ...body.data, ownerId: gate.account.id }).returning();
+  const [property] = await db.insert(properties).values({ ...(propertyValues(body.data) as typeof properties.$inferInsert), ownerId: gate.account.id }).returning();
   return NextResponse.json({ property }, { status: 201 });
 }

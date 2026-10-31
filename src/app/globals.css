@@ -162,3 +162,29 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Printing (and "Save as PDF"): just the page's content, no navigation or buttons. */
+@media print {
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  section {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
+.print-only {
+  display: none;
+}

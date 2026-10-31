@@ -15,6 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const items = landlord
     ? [
         { href: '/dashboard', label: 'Dashboard' },
+        { href: '/reports', label: 'Money & taxes' },
         { href: '/notifications', label: 'Notifications', badge: session.unread },
         { href: '/account', label: 'Account' },
       ]

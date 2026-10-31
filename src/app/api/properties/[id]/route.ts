@@ -6,7 +6,7 @@ import { requireLandlord } from '@/lib/auth/guards';
 import { todayEastern } from '@/lib/dates';
 import { ownedProperty } from '@/lib/rentals/access';
 import { chargeStatus } from '@/lib/rentals/rent';
-import { propertySchema } from '@/lib/rentals/schemas';
+import { propertySchema, propertyValues } from '@/lib/rentals/schemas';
 
 /** One home with everything on its page: leases, rent ledger, repairs and reminders. */
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -47,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });
 
   // A cleared optional field arrives as an empty string; store it as empty (null).
-  const values = Object.fromEntries(Object.entries(body.data).map(([k, v]) => [k, v === '' ? null : v]));
+  const values = propertyValues(body.data);
   const [updated] = await db
     .update(properties)
     .set({ ...values, updatedAt: new Date() })

@@ -38,6 +38,10 @@ export const properties = rentals.table('properties', {
   hoaName: varchar('hoa_name', { length: 150 }),
   hoaContact: text('hoa_contact'),
   notes: text('notes'),
+  // Depreciation: what the home cost, how much of that is land, and the day it was first ready to rent.
+  purchasePrice: decimal('purchase_price', { precision: 12, scale: 2 }),
+  landValue: decimal('land_value', { precision: 12, scale: 2 }),
+  placedInService: date('placed_in_service'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -124,6 +128,37 @@ export const reminders = rentals.table('reminders', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * The money ledger for a home: expenses, income other than rent, and security deposits.
+ * Rent comes from rent_charges and isn't copied here. Some rows are written for the landlord:
+ * a bill reminder marked paid (source 'reminder', one row per due date) and a repair marked fixed
+ * with a cost (source 'repair', kept in step with the repair).
+ */
+export const transactions = rentals.table(
+  'transactions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    propertyId: uuid('property_id')
+      .notNull()
+      .references(() => properties.id, { onDelete: 'cascade' }),
+    leaseId: uuid('lease_id').references(() => leases.id, { onDelete: 'set null' }),
+    type: varchar('type', { length: 10 }).notNull(), // 'expense' | 'income' | 'deposit'
+    category: varchar('category', { length: 30 }).notNull(), // see src/lib/rentals/money.ts
+    date: date('date').notNull(),
+    amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
+    payee: varchar('payee', { length: 150 }), // who was paid, or who paid
+    // Which account the money moved through: the rental business's, or the owner's own card.
+    paidFrom: varchar('paid_from', { length: 10 }).notNull().default('business'), // 'business' | 'personal'
+    description: text('description'),
+    sourceType: varchar('source_type', { length: 10 }), // 'reminder' | 'repair'
+    sourceId: uuid('source_id'),
+    sourceRef: varchar('source_ref', { length: 20 }), // the reminder's due date, or 'repair'
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ source: unique('transactions_source_key').on(t.sourceType, t.sourceId, t.sourceRef) }),
+);
 
 export const notifications = rentals.table('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),
