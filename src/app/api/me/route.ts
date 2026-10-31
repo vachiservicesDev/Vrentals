@@ -5,6 +5,7 @@ import { accounts, rentCharges, repairRequests } from '@/db/schema';
 import { requireAccount } from '@/lib/auth/guards';
 import { todayEastern } from '@/lib/dates';
 import { tenantLease } from '@/lib/rentals/access';
+import { liveAgreements } from '@/lib/rentals/agreements';
 import { ownerTakesPayments, pendingPayments } from '@/lib/rentals/payments';
 import { chargeStatus } from '@/lib/rentals/rent';
 
@@ -40,7 +41,8 @@ export async function GET() {
     db.select({ fullName: accounts.fullName, email: accounts.email, phone: accounts.phone }).from(accounts).where(eq(accounts.id, property.ownerId)).limit(1),
   ]);
 
-  const [payee, pending] = await Promise.all([ownerTakesPayments(property.ownerId), pendingPayments(charges.map((c) => c.id))]);
+  const [payee, pending, agreements] = await Promise.all([ownerTakesPayments(property.ownerId), pendingPayments(charges.map((c) => c.id)), liveAgreements([lease.id])]);
+  const agreement = agreements.find((a) => a.status !== 'draft');
   const processing = new Map(pending.map((p) => [p.chargeId, p.amount]));
   const today = todayEastern();
   const since = new Date(`${lease.startDate}T00:00:00Z`);
@@ -69,6 +71,8 @@ export async function GET() {
       })),
       // The landlord's Stripe account is connected, so a bank payment can be made here.
       onlinePayments: !!payee,
+      // The written lease, once the landlord has signed and sent it.
+      agreement: agreement ? { id: agreement.id, status: agreement.status } : null,
       // Repairs from before this lease began belong to an earlier tenant.
       repairs: repairs.filter((r) => r.createdAt >= since),
     },
