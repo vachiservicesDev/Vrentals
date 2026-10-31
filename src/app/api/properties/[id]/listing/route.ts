@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { listings } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
-import { ownedProperty } from '@/lib/rentals/access';
+import { OWN_HOME_NOT_RENTED, ownedProperty } from '@/lib/rentals/access';
 import { listingSchema } from '@/lib/rentals/leasing';
 
 const num = (v: number | '' | undefined) => (v === '' || v === undefined ? null : String(v));
@@ -24,6 +24,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
   const property = await ownedProperty(gate.ownerId, params.id);
   if (!property) return NextResponse.json({ message: 'Not found' }, { status: 404 });
+  if (property.use === 'own') return NextResponse.json({ message: OWN_HOME_NOT_RENTED }, { status: 409 });
 
   const body = listingSchema.safeParse(await request.json().catch(() => ({})));
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });

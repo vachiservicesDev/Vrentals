@@ -28,6 +28,17 @@ see when someone is coming. It has its own look, login and address, separate fro
   when it's fixed. Repair cost and private notes stay landlord-only.
 - Access ends when the lease is ended.
 
+**Homeowners** (any home marked "I live here", `/reports/home`)
+- A home can be one you rent out or one you live in. A home you live in has no tenant, lease or
+  listing; its page has payments coming up, money, repairs, documents and its details.
+- Money uses homeowner categories: mortgage interest, points, PMI and property tax (Schedule A),
+  principal, insurance, HOA, utilities, repairs and maintenance (not deductible), and improvements
+  (home, energy-saving, solar/battery) that add to cost basis.
+- Year-end tax summary, printable and as CSV: Schedule A items with the standard deduction and SALT
+  cap for the year, what wasn't deductible, adjusted cost basis, energy credit estimates (Form 5695,
+  2023 to 2025 only; the credits ended after 2025), and the home office share for self-employed
+  owners (simplified and regular method). Run migration `0007_homeowner.sql`.
+
 **Both**: in-app notifications (`/notifications`) and account details (`/account`).
 
 Not yet: online rent payments (Stripe), repair photos, email/text reminders, listing to rental

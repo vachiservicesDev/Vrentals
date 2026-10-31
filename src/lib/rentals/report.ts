@@ -43,12 +43,13 @@ export interface Report {
   missingDepreciation: string[];
 }
 
-/** Profit and loss for the owner's homes (or one of them) over a date range, with every entry behind it. */
+/** Profit and loss for the owner's rental homes (or one of them) over a date range, with every entry behind it. */
 export async function buildReport(ownerId: string, from: string, to: string, propertyId?: string): Promise<Report> {
   const homes = await db
     .select()
     .from(properties)
-    .where(and(eq(properties.ownerId, ownerId), propertyId ? eq(properties.id, propertyId) : undefined))
+    // Homes the owner lives in aren't rentals: they're on the homeowner summary instead.
+    .where(and(eq(properties.ownerId, ownerId), eq(properties.use, 'rental'), propertyId ? eq(properties.id, propertyId) : undefined))
     .orderBy(asc(properties.name));
   const ids = homes.map((h) => h.id);
   const name = new Map(homes.map((h) => [h.id, h.name]));

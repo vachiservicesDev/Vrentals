@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { leases } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
-import { ownedProperty } from '@/lib/rentals/access';
+import { OWN_HOME_NOT_RENTED, ownedProperty } from '@/lib/rentals/access';
 import { dec, leaseSchema } from '@/lib/rentals/schemas';
 
 /** Starts a lease on a home. A home has at most one active lease; end the old one first. */
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const property = await ownedProperty(gate.ownerId, params.id);
   if (!property) return NextResponse.json({ message: 'Not found' }, { status: 404 });
+  if (property.use === 'own') return NextResponse.json({ message: OWN_HOME_NOT_RENTED }, { status: 409 });
 
   const body = leaseSchema.safeParse(await request.json());
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });

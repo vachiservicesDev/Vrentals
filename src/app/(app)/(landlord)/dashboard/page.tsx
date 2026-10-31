@@ -6,6 +6,7 @@ import { REMINDER_KINDS, labelFrom, statusOf } from '@/lib/status';
 import { STATE_OPTIONS } from '@/lib/rentals/states';
 import { Button } from '@/components/ui/Button';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
+import { PROPERTY_USES } from '@/lib/rentals/homeowner';
 import { FormStatus } from '@/components/ui/forms';
 import { Alert, Chip, DataTable, EmptyState, Loading, PageHeader, Panel, StatCard, When, formatMoney } from '@/components/ui/ui';
 
@@ -17,6 +18,7 @@ interface Home {
   tenantName: string | null;
   monthlyRent: string | null;
   leaseEnds: string | null;
+  use: 'rental' | 'own';
 }
 
 interface Overview {
@@ -43,7 +45,9 @@ export default function DashboardPage() {
   async function addHome(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
-    const result = await action.run('add', '/api/properties', { body: formValues(form) }, 'Home added. Open it to add the tenant and lease.');
+    const values = formValues(form);
+    const done = values.use === 'own' ? 'Home added. Open it to add your mortgage, tax and other payments.' : 'Home added. Open it to add the tenant and lease.';
+    const result = await action.run('add', '/api/properties', { body: values }, done);
     if (result.ok) {
       form.reset();
       homes.reload();
@@ -68,62 +72,78 @@ export default function DashboardPage() {
 
   const thisMonth = o?.month.slice(0, 7) ?? '';
   const behindTotal = (o?.behind ?? []).reduce((sum, b) => sum + Number(b.owed), 0);
+  // Someone who only tracks the home they live in has no rent to collect.
+  const onlyOwn = list.length > 0 && list.every((h) => h.use === 'own');
+  const anyOwn = list.some((h) => h.use === 'own');
 
   return (
     <>
-      <PageHeader eyebrow="Dashboard" title="Your rentals" lead="Rent, repairs, insurance and HOA for your homes in one place." />
+      <PageHeader
+        eyebrow="Dashboard"
+        title={onlyOwn ? 'Your home' : 'Your rentals'}
+        lead={onlyOwn ? 'Payments, repairs, insurance, HOA and your year-end tax summary in one place.' : 'Rent, repairs, insurance and HOA for your homes in one place.'}
+        actions={anyOwn ? <Link href="/reports/home" className="font-semibold text-brand-700 hover:underline">Homeowner tax summary</Link> : undefined}
+      />
       <div className="grid gap-8">
         {overview.error && <Alert title="Couldn't load the overview">{overview.error}</Alert>}
         <section aria-label="This month">
-          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              href="#rent"
-              value={o ? formatMoney(o.collected) : '–'}
-              label={o ? `Collected for ${monthLabel(o.month)}` : 'Collected this month'}
-              hint={o ? `of ${formatMoney(o.expected)} expected` : undefined}
-            />
-            <StatCard href="#behind" value={o ? o.behind.length : '–'} label="Behind on rent" hint={o && behindTotal ? `${formatMoney(behindTotal)} owed` : 'Everyone is up to date.'} tone={o?.behind.length ? 'danger' : undefined} />
+          <ul className={`grid gap-4 sm:grid-cols-2 ${onlyOwn ? '' : 'xl:grid-cols-4'}`}>
+            {!onlyOwn && (
+              <>
+                <StatCard
+                  href="#rent"
+                  value={o ? formatMoney(o.collected) : '–'}
+                  label={o ? `Collected for ${monthLabel(o.month)}` : 'Collected this month'}
+                  hint={o ? `of ${formatMoney(o.expected)} expected` : undefined}
+                />
+                <StatCard href="#behind" value={o ? o.behind.length : '–'} label="Behind on rent" hint={o && behindTotal ? `${formatMoney(behindTotal)} owed` : 'Everyone is up to date.'} tone={o?.behind.length ? 'danger' : undefined} />
+              </>
+            )}
             <StatCard href="#repairs" value={o ? o.repairs.length : '–'} label="Open repairs" hint="Reported and not fixed yet." tone={o?.repairs.some((r) => r.urgency === 'urgent' && r.status === 'open') ? 'warning' : undefined} />
             <StatCard href="#reminders" value={o ? o.reminders.length : '–'} label="Bills due in 30 days" hint="Insurance, HOA, tax and more." tone={o?.reminders.some((r) => r.dueDate < new Date().toISOString().slice(0, 10)) ? 'warning' : undefined} />
           </ul>
         </section>
 
-        <Panel id="rent" title="Add a month's rent" description="Adds the rent to every active lease for that month. Running it again never charges twice.">
-          <form onSubmit={addRent} noValidate className="grid gap-5">
-            <FormStatus error={rentAction.error} success={rentAction.success} fieldErrors={rentAction.fieldErrors} labels={{ month: 'Month' }} />
-            <div className="flex flex-wrap items-end gap-4">
-              <label className="grid gap-1.5">
-                <span className="font-medium text-ink">Month</span>
-                <input key={thisMonth} type="month" name="month" defaultValue={thisMonth} required className="min-h-11 rounded-md border border-line-input bg-white px-3 text-ink focus:border-accent-600" />
-              </label>
-              <Button type="submit" busy={rentAction.busy === 'rent'} busyLabel="Adding…">
-                Add rent
-              </Button>
-            </div>
-          </form>
-        </Panel>
+        {!onlyOwn && (
+          <>
+            <Panel id="rent" title="Add a month's rent" description="Adds the rent to every active lease for that month. Running it again never charges twice.">
+              <form onSubmit={addRent} noValidate className="grid gap-5">
+                <FormStatus error={rentAction.error} success={rentAction.success} fieldErrors={rentAction.fieldErrors} labels={{ month: 'Month' }} />
+                <div className="flex flex-wrap items-end gap-4">
+                  <label className="grid gap-1.5">
+                    <span className="font-medium text-ink">Month</span>
+                    <input key={thisMonth} type="month" name="month" defaultValue={thisMonth} required className="min-h-11 rounded-md border border-line-input bg-white px-3 text-ink focus:border-accent-600" />
+                  </label>
+                  <Button type="submit" busy={rentAction.busy === 'rent'} busyLabel="Adding…">
+                    Add rent
+                  </Button>
+                </div>
+              </form>
+            </Panel>
 
-        <section id="behind">
-          <h2 className="font-display mb-3 text-xl font-semibold text-ink">Behind on rent</h2>
-          {overview.loading && !o ? (
-            <Loading />
-          ) : !o?.behind.length ? (
-            <EmptyState>Nobody is behind. Rent counts as late once the grace period after the due date has passed.</EmptyState>
-          ) : (
-            <DataTable
-              caption="Tenants behind on rent"
-              rows={o.behind}
-              rowKey={(b) => b.chargeId}
-              columns={[
-                { header: 'Tenant', primary: true, cell: (b) => <Link href={`/homes/${b.propertyId}`} className="font-semibold text-brand-700 hover:underline">{b.tenantName}</Link> },
-                { header: 'Home', cell: (b) => b.home },
-                { header: 'Month', cell: (b) => monthLabel(b.period) },
-                { header: 'Was due', cell: (b) => <When iso={b.dueDate} /> },
-                { header: 'Still owed', align: 'right', cell: (b) => <span className="font-semibold text-danger-700">{formatMoney(b.owed)}</span> },
-              ]}
-            />
-          )}
-        </section>
+            <section id="behind">
+              <h2 className="font-display mb-3 text-xl font-semibold text-ink">Behind on rent</h2>
+              {overview.loading && !o ? (
+                <Loading />
+              ) : !o?.behind.length ? (
+                <EmptyState>Nobody is behind. Rent counts as late once the grace period after the due date has passed.</EmptyState>
+              ) : (
+                <DataTable
+                  caption="Tenants behind on rent"
+                  rows={o.behind}
+                  rowKey={(b) => b.chargeId}
+                  columns={[
+                    { header: 'Tenant', primary: true, cell: (b) => <Link href={`/homes/${b.propertyId}`} className="font-semibold text-brand-700 hover:underline">{b.tenantName}</Link> },
+                    { header: 'Home', cell: (b) => b.home },
+                    { header: 'Month', cell: (b) => monthLabel(b.period) },
+                    { header: 'Was due', cell: (b) => <When iso={b.dueDate} /> },
+                    { header: 'Still owed', align: 'right', cell: (b) => <span className="font-semibold text-danger-700">{formatMoney(b.owed)}</span> },
+                  ]}
+                />
+              )}
+            </section>
+          </>
+        )}
 
         <section id="repairs">
           <h2 className="font-display mb-3 text-xl font-semibold text-ink">Repairs to handle</h2>
@@ -184,7 +204,7 @@ export default function DashboardPage() {
               columns={[
                 { header: 'Home', primary: true, cell: (h) => <Link href={`/homes/${h.id}`} className="font-semibold text-brand-700 hover:underline">{h.name}</Link> },
                 { header: 'Address', cell: (h) => [h.address, h.city].filter(Boolean).join(', ') },
-                { header: 'Tenant', cell: (h) => h.tenantName ?? <Chip tone="new">Vacant</Chip> },
+                { header: 'Tenant', cell: (h) => (h.use === 'own' ? <Chip tone="info">You live here</Chip> : h.tenantName ?? <Chip tone="new">Vacant</Chip>) },
                 { header: 'Rent', align: 'right', cell: (h) => formatMoney(h.monthlyRent) },
                 { header: 'Lease ends', cell: (h) => <When iso={h.leaseEnds} empty={h.tenantName ? 'Month to month' : '—'} /> },
               ]}
@@ -200,6 +220,7 @@ export default function DashboardPage() {
               fieldErrors={action.fieldErrors}
               labels={{ name: 'Name', address: 'Street address', city: 'City', state: 'State', zip: 'ZIP code' }}
             />
+            <SelectField name="use" label="How do you use this home?" options={[...PROPERTY_USES]} defaultValue="rental" hint="Pick “I live here” to track your own home's payments, repairs and year-end taxes." id="f-add-use" />
             <FieldRow>
               <TextField name="name" label="Name" required hint='What you call it, like "Unit 12" or "Wooster Heights townhome".' errors={action.fieldErrors} maxLength={150} />
               <TextField name="address" label="Street address" required errors={action.fieldErrors} autoComplete="street-address" />

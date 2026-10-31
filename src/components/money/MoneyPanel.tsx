@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { api, formValues, useAction, useResource } from '@/lib/client/api';
-import { CATEGORIES, PAID_FROM, TRANSACTION_TYPES, categoryOf, type TransactionType } from '@/lib/rentals/money';
+import { CATEGORIES, PAID_FROM, TRANSACTION_TYPES, categoryOf, type Category, type TransactionType } from '@/lib/rentals/money';
+import { HOME_CAPITAL_CATEGORIES, HOME_EXPENSE_CATEGORIES, HOME_TRANSACTION_TYPES, homeCategoryOf, type HomeCategory } from '@/lib/rentals/homeowner';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
@@ -24,21 +25,39 @@ interface Summary {
   statement: { totalIncome: number; totalExpenses: number; net: number; paidPersonally: number; deposits: { held: number } };
 }
 
+interface HomeSummary {
+  combined: { totalSpending: number; totalScheduleA: number; totalImprovementsThisYear: number; basis: { adjusted: number | null } } | null;
+}
+
 const TYPE_LABEL: Record<string, string> = { expense: 'Expense', income: 'Income', capital: 'Improvement', deposit: 'Deposit' };
-const options = (type: TransactionType) => CATEGORIES[type].map((c) => ({ value: c.value, label: c.line ? `${c.label} (Sch. E line ${c.line})` : c.label }));
+
+/** A rental files under Schedule E; a home you live in has its own payment and improvement categories. */
+function catalog(own: boolean) {
+  return {
+    types: own ? [...HOME_TRANSACTION_TYPES] : [...TRANSACTION_TYPES],
+    categoryOf: (type: string, category: string): Category | HomeCategory | undefined => (own ? homeCategoryOf(type, category) : categoryOf(type, category)),
+    options: (type: TransactionType) =>
+      own
+        ? (type === 'capital' ? HOME_CAPITAL_CATEGORIES : HOME_EXPENSE_CATEGORIES).map((c) => ({ value: c.value, label: c.form ? `${c.label} (${c.form})` : c.label }))
+        : CATEGORIES[type].map((c) => ({ value: c.value, label: c.line ? `${c.label} (Sch. E line ${c.line})` : c.label })),
+  };
+}
 
 /** A home's money for this year: totals, every entry, and a form to add one. */
-export function MoneyPanel({ propertyId, reloadKey }: { propertyId: string; reloadKey: string }) {
+export function MoneyPanel({ propertyId, reloadKey, own = false }: { propertyId: string; reloadKey: string; own?: boolean }) {
   const year = new Date().getFullYear();
   const range = `from=${year}-01-01&to=${year}-12-31`;
   const list = useResource<{ transactions: Transaction[] }>(`/api/properties/${propertyId}/transactions?${range}&k=${reloadKey}`);
-  const summary = useResource<Summary>(`/api/reports/pnl?property=${propertyId}&${range}&k=${reloadKey}`);
+  const summary = useResource<Summary>(own ? null : `/api/reports/pnl?property=${propertyId}&${range}&k=${reloadKey}`);
+  const homeSummary = useResource<HomeSummary>(own ? `/api/reports/home?property=${propertyId}&year=${year}&k=${reloadKey}` : null);
+  const cat = catalog(own);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
   const reload = () => {
     list.reload();
-    summary.reload();
+    if (own) homeSummary.reload();
+    else summary.reload();
   };
 
   async function remove(t: Transaction) {
@@ -50,20 +69,39 @@ export function MoneyPanel({ propertyId, reloadKey }: { propertyId: string; relo
   }
 
   const s = summary.data?.statement;
+  const h = homeSummary.data?.combined;
   const rows = list.data?.transactions ?? [];
   return (
     <Panel
       id="money"
       title={`Money in ${year}`}
-      description="Rent you record above counts automatically. Add every other cost and payment here; each one is filed under its IRS Schedule E line."
+      description={
+        own
+          ? 'Add your mortgage, property tax, insurance, bills, repairs and improvements here. At year end they become your tax summary.'
+          : 'Rent you record above counts automatically. Add every other cost and payment here; each one is filed under its IRS Schedule E line.'
+      }
       actions={
-        <LinkButton href={`/reports?property=${propertyId}`} variant="secondary" size="sm" arrow>
-          Profit &amp; loss
-        </LinkButton>
+        own ? (
+          <LinkButton href={`/reports/home?property=${propertyId}&year=${year}`} variant="secondary" size="sm" arrow>
+            Tax summary
+          </LinkButton>
+        ) : (
+          <LinkButton href={`/reports?property=${propertyId}`} variant="secondary" size="sm" arrow>
+            Profit &amp; loss
+          </LinkButton>
+        )
       }
     >
       <div className="grid gap-6">
-        {s && (
+        {own && h && (
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Figure label="Paid this year" value={formatMoney(h.totalSpending)} />
+            <Figure label="Deductible if you itemize" value={formatMoney(h.totalScheduleA)} hint="Schedule A" />
+            <Figure label="Improvements" value={formatMoney(h.totalImprovementsThisYear)} hint="Add to cost basis" />
+            <Figure label="Cost basis" value={h.basis.adjusted === null ? '—' : formatMoney(h.basis.adjusted)} hint={h.basis.adjusted === null ? 'Add the purchase price below' : 'Price plus improvements'} />
+          </dl>
+        )}
+        {!own && s && (
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Figure label="Income" value={formatMoney(s.totalIncome)} />
             <Figure label="Expenses" value={formatMoney(s.totalExpenses)} />
@@ -74,7 +112,7 @@ export function MoneyPanel({ propertyId, reloadKey }: { propertyId: string; relo
         {rowError && <Alert>{rowError}</Alert>}
         {list.error && <Alert>{list.error}</Alert>}
         {rows.length === 0 ? (
-          <EmptyState>No expenses or other income yet this year.</EmptyState>
+          <EmptyState>{own ? 'Nothing recorded yet this year.' : 'No expenses or other income yet this year.'}</EmptyState>
         ) : (
           <DataTable
             caption={`Money entries for ${year}`}
@@ -86,7 +124,7 @@ export function MoneyPanel({ propertyId, reloadKey }: { propertyId: string; relo
                 primary: true,
                 cell: (t) => (
                   <span>
-                    {categoryOf(t.type, t.category)?.label ?? t.category}
+                    {cat.categoryOf(t.type, t.category)?.label ?? t.category}
                     <span className="block text-sm font-normal text-muted">{[t.payee, t.description].filter(Boolean).join(' · ') || TYPE_LABEL[t.type]}</span>
                   </span>
                 ),
@@ -97,7 +135,7 @@ export function MoneyPanel({ propertyId, reloadKey }: { propertyId: string; relo
                 cell: (t) => (
                   <span className="inline-flex flex-wrap gap-1.5">
                     <Chip tone={t.type === 'income' ? 'live' : t.type === 'deposit' ? 'info' : t.type === 'capital' ? 'warning' : 'draft'}>{TYPE_LABEL[t.type]}</Chip>
-                    {(t.type === 'expense' || t.type === 'capital') && t.paidFrom === 'personal' && <Chip tone="new">Personal</Chip>}
+                    {!own && (t.type === 'expense' || t.type === 'capital') && t.paidFrom === 'personal' && <Chip tone="new">Personal</Chip>}
                   </span>
                 ),
               },
@@ -129,6 +167,7 @@ export function MoneyPanel({ propertyId, reloadKey }: { propertyId: string; relo
               url={`/api/transactions/${editing.id}`}
               method="PATCH"
               initial={editing}
+              own={own}
               title="Edit entry"
               onDone={() => {
                 setEditing(null);
@@ -139,9 +178,9 @@ export function MoneyPanel({ propertyId, reloadKey }: { propertyId: string; relo
           </div>
         ) : (
           <details className="rounded-lg border border-line" open={rows.length === 0}>
-            <summary className="flex min-h-11 cursor-pointer items-center px-4 font-semibold text-brand-700">Add an expense or income</summary>
+            <summary className="flex min-h-11 cursor-pointer items-center px-4 font-semibold text-brand-700">{own ? 'Add a payment or improvement' : 'Add an expense or income'}</summary>
             <div className="border-t border-line p-4">
-              <TransactionForm url={`/api/properties/${propertyId}/transactions`} method="POST" onDone={reload} />
+              <TransactionForm url={`/api/properties/${propertyId}/transactions`} method="POST" own={own} onDone={reload} />
             </div>
           </details>
         )}
@@ -164,6 +203,7 @@ function TransactionForm({
   url,
   method,
   initial,
+  own = false,
   title,
   onDone,
   onCancel,
@@ -171,6 +211,7 @@ function TransactionForm({
   url: string;
   method: 'POST' | 'PATCH';
   initial?: Transaction;
+  own?: boolean;
   title?: string;
   onDone: () => void;
   onCancel?: () => void;
@@ -178,8 +219,10 @@ function TransactionForm({
   const action = useAction();
   const [type, setType] = useState<TransactionType>(initial?.type ?? 'expense');
   const [category, setCategory] = useState(initial?.category ?? '');
-  const hint = categoryOf(type, category)?.hint;
-  const spends = type === 'expense' || type === 'capital';
+  const cat = catalog(own);
+  const hint = cat.categoryOf(type, category)?.hint;
+  // A home you live in has no business account, so there's nothing to split.
+  const spends = !own && (type === 'expense' || type === 'capital');
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -206,7 +249,7 @@ function TransactionForm({
           name="type"
           label="Kind"
           required
-          options={[...TRANSACTION_TYPES]}
+          options={cat.types}
           value={type}
           onChange={(e) => {
             setType(e.target.value as TransactionType);
@@ -219,7 +262,7 @@ function TransactionForm({
           label="Category"
           required
           placeholder="Choose one"
-          options={options(type)}
+          options={cat.options(type)}
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           hint={hint}
@@ -230,7 +273,7 @@ function TransactionForm({
       </FieldRow>
       <FieldRow cols={3}>
         <TextField name="date" label={type === 'income' ? 'Date received' : 'Date paid'} type="date" required defaultValue={initial?.date ?? new Date().toISOString().slice(0, 10)} errors={action.fieldErrors} id={fid('date')} />
-        <TextField name="payee" label={type === 'income' ? 'Paid by' : 'Paid to'} defaultValue={initial?.payee} hint={type === 'income' ? undefined : 'The company or person, as on the receipt.'} errors={action.fieldErrors} id={fid('payee')} />
+        <TextField name="payee" label={type === 'income' ? 'Paid by' : 'Paid to'} defaultValue={initial?.payee} hint={type === 'income' ? undefined : own ? 'Your lender, the town, the contractor.' : 'The company or person, as on the receipt.'} errors={action.fieldErrors} id={fid('payee')} />
         {spends ? (
           <SelectField name="paidFrom" label="Paid from" options={[...PAID_FROM]} defaultValue={initial?.paidFrom ?? 'business'} id={fid('paidFrom')} />
         ) : (

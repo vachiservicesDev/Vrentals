@@ -12,6 +12,7 @@ import { MoneyPanel } from '@/components/money/MoneyPanel';
 import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { ApplicationsPanel, type Application } from '@/components/leasing/ApplicationsPanel';
 import { ListingPanel } from '@/components/leasing/ListingPanel';
+import { PROPERTY_USES } from '@/lib/rentals/homeowner';
 import { STATE_OPTIONS, stateHints, stateName } from '@/lib/rentals/states';
 import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatMoney } from '@/components/ui/ui';
 
@@ -28,6 +29,9 @@ interface Property {
   purchasePrice: string | null;
   landValue: string | null;
   placedInService: string | null;
+  use: 'rental' | 'own';
+  homeSqft: number | null;
+  officeSqft: number | null;
 }
 interface Lease {
   id: string;
@@ -138,6 +142,20 @@ export default function RentalHomePage() {
   const lease = leases.find((l) => l.status === 'active') ?? null;
   const past = leases.filter((l) => l.status !== 'active');
   const address = [property.address, property.city, `${property.state} ${property.zip ?? ''}`.trim()].filter(Boolean).join(', ');
+
+  if (property.use === 'own')
+    return (
+      <>
+        <PageHeader back={back} eyebrow="Your home" title={property.name} lead={address} actions={<Chip tone="info">You live here</Chip>} />
+        <div className="grid gap-8">
+          <RemindersPanel propertyId={property.id} reminders={reminders} own onChange={reload} />
+          <MoneyPanel propertyId={property.id} own reloadKey={moneyKey(repairs, reminders)} />
+          <RepairsPanel propertyId={property.id} repairs={repairs} own onChange={reload} />
+          <DocumentsPanel propertyId={property.id} />
+          <HomePanel property={property} onChange={reload} onDeleted={() => router.push('/dashboard')} />
+        </div>
+      </>
+    );
 
   return (
     <>
@@ -547,7 +565,7 @@ function ChargeActions({ charge: c, lease, home, landlordName }: { charge: Charg
   );
 }
 
-function RepairsPanel({ propertyId, repairs, onChange }: { propertyId: string; repairs: Repair[]; onChange: () => void }) {
+function RepairsPanel({ propertyId, repairs, own = false, onChange }: { propertyId: string; repairs: Repair[]; own?: boolean; onChange: () => void }) {
   const action = useAction();
 
   async function add(e: React.FormEvent<HTMLFormElement>) {
@@ -561,7 +579,15 @@ function RepairsPanel({ propertyId, repairs, onChange }: { propertyId: string; r
   }
 
   return (
-    <Panel id="repairs" title="Repairs" description="Tenants report repairs from their account and you're notified. Set a visit time and they're told automatically.">
+    <Panel
+      id="repairs"
+      title="Repairs"
+      description={
+        own
+          ? 'Keep track of what needs fixing, who is coming and what it cost. A repair marked fixed with a cost is added under Money.'
+          : "Tenants report repairs from their account and you're notified. Set a visit time and they're told automatically."
+      }
+    >
       <div className="grid gap-6">
         {repairs.length === 0 ? (
           <EmptyState>No repairs yet.</EmptyState>
@@ -573,7 +599,7 @@ function RepairsPanel({ propertyId, repairs, onChange }: { propertyId: string; r
           </ul>
         )}
         <details className="rounded-lg border border-line">
-          <summary className="flex min-h-11 cursor-pointer items-center px-4 font-semibold text-brand-700">Log a repair yourself</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center px-4 font-semibold text-brand-700">{own ? 'Add a repair' : 'Log a repair yourself'}</summary>
           <form onSubmit={add} noValidate className="grid gap-5 border-t border-line p-4">
             <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ title: 'What needs fixing' }} />
             <FieldRow>
@@ -666,7 +692,7 @@ function RepairItem({ repair: r, onChange }: { repair: Repair; onChange: () => v
   );
 }
 
-function RemindersPanel({ propertyId, reminders, onChange }: { propertyId: string; reminders: Reminder[]; onChange: () => void }) {
+function RemindersPanel({ propertyId, reminders, own = false, onChange }: { propertyId: string; reminders: Reminder[]; own?: boolean; onChange: () => void }) {
   const action = useAction();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
@@ -694,11 +720,19 @@ function RemindersPanel({ propertyId, reminders, onChange }: { propertyId: strin
 
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <Panel id="reminders" title="Insurance, HOA and bills" description="Renewals and dues for this home. Marking one paid records it under Money; repeating ones then roll to the next date.">
+    <Panel
+      id="reminders"
+      title={own ? 'Payments coming up' : 'Insurance, HOA and bills'}
+      description={
+        own
+          ? 'Mortgage, property tax, insurance, HOA and anything else that repeats. Marking one paid records it under Money and rolls it to the next date.'
+          : 'Renewals and dues for this home. Marking one paid records it under Money; repeating ones then roll to the next date.'
+      }
+    >
       <div className="grid gap-6">
         {rowError && <Alert>{rowError}</Alert>}
         {active.length === 0 ? (
-          <EmptyState>No reminders yet. Add your landlord insurance renewal and HOA dues below.</EmptyState>
+          <EmptyState>{own ? 'No payments yet. Add your property tax due dates, insurance renewal and HOA dues below.' : 'No reminders yet. Add your landlord insurance renewal and HOA dues below.'}</EmptyState>
         ) : (
           <DataTable
             caption="Reminders"
@@ -767,29 +801,44 @@ function RemindersPanel({ propertyId, reminders, onChange }: { propertyId: strin
 
 function HomePanel({ property, onChange, onDeleted }: { property: Property; onChange: () => void; onDeleted: () => void }) {
   const action = useAction();
+  const own = property.use === 'own';
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     // Send empty values too, so clearing a field sticks.
     const body = Object.fromEntries(
-      ['name', 'address', 'city', 'state', 'hoaName', 'hoaContact', 'notes', 'purchasePrice', 'landValue', 'placedInService'].map((k) => [k, String(fd.get(k) ?? '').trim()]),
+      ['name', 'address', 'city', 'state', 'hoaName', 'hoaContact', 'notes', 'purchasePrice', 'placedInService', ...(own ? ['homeSqft', 'officeSqft'] : ['landValue'])].map((k) => [
+        k,
+        String(fd.get(k) ?? '').trim(),
+      ]),
     );
+    const use = String(fd.get('use') ?? property.use);
     const zip = String(fd.get('zip') ?? '').trim();
-    const result = await action.run('save', `/api/properties/${property.id}`, { method: 'PATCH', body: zip ? { ...body, zip } : body }, 'Home details saved.');
+    const result = await action.run('save', `/api/properties/${property.id}`, { method: 'PATCH', body: { ...body, use, ...(zip ? { zip } : {}) } }, 'Home details saved.');
     if (result.ok) onChange();
   }
 
   async function remove() {
-    if (!window.confirm(`Delete ${property.name}? This also deletes its leases, rent history, repairs and reminders, and can't be undone.`)) return;
+    const what = own ? 'its payments, repairs, reminders and documents' : 'its leases, rent history, repairs and reminders';
+    if (!window.confirm(`Delete ${property.name}? This also deletes ${what}, and can't be undone.`)) return;
     const result = await action.run('delete', `/api/properties/${property.id}`, { method: 'DELETE' });
     if (result.ok) onDeleted();
   }
 
   return (
-    <Panel title="Home details, HOA and depreciation">
+    <Panel title={own ? 'Home details, HOA and cost basis' : 'Home details, HOA and depreciation'}>
       <form onSubmit={save} noValidate className="grid gap-5">
-        <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ name: 'Name', address: 'Street address', zip: 'ZIP code' }} />
+        <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ name: 'Name', address: 'Street address', zip: 'ZIP code', use: 'How you use it' }} />
+        <SelectField
+          name="use"
+          label="How do you use this home?"
+          options={[...PROPERTY_USES]}
+          defaultValue={property.use}
+          hint="A home you live in has no tenant or lease, and its money becomes a homeowner tax summary instead of Schedule E."
+          errors={action.fieldErrors}
+          id="f-home-use"
+        />
         <FieldRow>
           <TextField name="name" label="Name" required defaultValue={property.name} errors={action.fieldErrors} id="f-home-name" />
           <TextField name="address" label="Street address" required defaultValue={property.address} errors={action.fieldErrors} id="f-home-address" />
@@ -804,15 +853,40 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
           <TextAreaField name="hoaContact" label="HOA contact" rows={2} defaultValue={property.hoaContact} errors={action.fieldErrors} id="f-home-hoaContact" />
         </FieldRow>
         <TextAreaField name="notes" label="Notes" rows={3} defaultValue={property.notes} hint="Appliances, paint colors, alarm codes, anything worth keeping." errors={action.fieldErrors} id="f-home-notes" />
-        <fieldset className="grid gap-4 rounded-lg border border-line p-4">
-          <legend className="px-1 font-semibold text-ink">For depreciation</legend>
-          <p className="text-sm text-ink-2">The IRS lets you deduct the building&apos;s cost over 27.5 years. Fill these in once and the yearly report estimates it for you. Your closing statement and town assessment have the numbers.</p>
-          <FieldRow cols={3}>
-            <TextField name="purchasePrice" label="Purchase price ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.purchasePrice} hint="Plus closing costs you paid." errors={action.fieldErrors} id="f-home-purchasePrice" />
-            <TextField name="landValue" label="Land value ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.landValue} hint="Land doesn't depreciate. The town assessment splits land and building." errors={action.fieldErrors} id="f-home-landValue" />
-            <TextField name="placedInService" label="First ready to rent" type="date" defaultValue={property.placedInService} hint="The day it was first available for rent." errors={action.fieldErrors} id="f-home-placedInService" />
-          </FieldRow>
-        </fieldset>
+        {own ? (
+          <>
+            <fieldset className="grid gap-4 rounded-lg border border-line p-4">
+              <legend className="px-1 font-semibold text-ink">For your cost basis</legend>
+              <p className="text-sm text-ink-2">
+                What you paid plus every improvement is your cost basis. When you sell, it lowers the gain you could owe tax on. Your closing statement has the numbers.
+              </p>
+              <FieldRow>
+                <TextField name="purchasePrice" label="Purchase price ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.purchasePrice} hint="Plus closing costs like title, recording and transfer taxes." errors={action.fieldErrors} id="f-home-purchasePrice" />
+                <TextField name="placedInService" label="Date you bought it" type="date" defaultValue={property.placedInService} errors={action.fieldErrors} id="f-home-placedInService" />
+              </FieldRow>
+            </fieldset>
+            <fieldset className="grid gap-4 rounded-lg border border-line p-4">
+              <legend className="px-1 font-semibold text-ink">Home office (self-employed only)</legend>
+              <p className="text-sm text-ink-2">
+                If you run a business or freelance from a room used only for work, part of your home costs can be deducted. W-2 employees working from home can&apos;t take this. Leave blank if it doesn&apos;t apply.
+              </p>
+              <FieldRow>
+                <TextField name="homeSqft" label="Whole home (sq ft)" type="number" inputMode="numeric" min={1} step="1" defaultValue={property.homeSqft === null ? '' : String(property.homeSqft)} errors={action.fieldErrors} id="f-home-homeSqft" />
+                <TextField name="officeSqft" label="Office (sq ft)" type="number" inputMode="numeric" min={1} step="1" defaultValue={property.officeSqft === null ? '' : String(property.officeSqft)} errors={action.fieldErrors} id="f-home-officeSqft" />
+              </FieldRow>
+            </fieldset>
+          </>
+        ) : (
+          <fieldset className="grid gap-4 rounded-lg border border-line p-4">
+            <legend className="px-1 font-semibold text-ink">For depreciation</legend>
+            <p className="text-sm text-ink-2">The IRS lets you deduct the building&apos;s cost over 27.5 years. Fill these in once and the yearly report estimates it for you. Your closing statement and town assessment have the numbers.</p>
+            <FieldRow cols={3}>
+              <TextField name="purchasePrice" label="Purchase price ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.purchasePrice} hint="Plus closing costs you paid." errors={action.fieldErrors} id="f-home-purchasePrice" />
+              <TextField name="landValue" label="Land value ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.landValue} hint="Land doesn't depreciate. The town assessment splits land and building." errors={action.fieldErrors} id="f-home-landValue" />
+              <TextField name="placedInService" label="First ready to rent" type="date" defaultValue={property.placedInService} hint="The day it was first available for rent." errors={action.fieldErrors} id="f-home-placedInService" />
+            </FieldRow>
+          </fieldset>
+        )}
         <div className="flex flex-wrap gap-3">
           <Button type="submit" busy={action.busy === 'save'} busyLabel="Saving…">
             Save details

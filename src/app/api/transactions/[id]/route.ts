@@ -3,8 +3,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { transactions } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
-import { ownedTransaction } from '@/lib/rentals/access';
-import { dec, transactionSchema } from '@/lib/rentals/schemas';
+import { ownedProperty, ownedTransaction } from '@/lib/rentals/access';
+import { dec, transactionSchemaFor } from '@/lib/rentals/schemas';
 
 const FROM_REPAIR = 'This cost comes from a repair. Change it on the repair, under Repairs.';
 
@@ -17,7 +17,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!before) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   if (before.sourceType === 'repair') return NextResponse.json({ message: FROM_REPAIR }, { status: 409 });
 
-  const body = transactionSchema.safeParse(await request.json().catch(() => null));
+  const home = await ownedProperty(gate.ownerId, before.propertyId);
+  const body = transactionSchemaFor(home?.use ?? 'rental').safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });
 
   const d = body.data;
