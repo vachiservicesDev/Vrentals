@@ -30,7 +30,7 @@ export function ForgotForm() {
     return (
       <div className="mt-6">
         <Alert tone="success" title="Check your email">
-          If <span className="font-medium">{sentTo}</span> has a Rentals account, a reset link is on its way. It works once and expires in an hour.
+          If <span className="font-medium">{sentTo}</span> has a Vrentals account, a reset link is on its way. It works once and expires in an hour.
         </Alert>
       </div>
     );

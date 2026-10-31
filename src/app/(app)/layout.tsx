@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { Logo } from '@/components/ui/Logo';
 import { buttonClass } from '@/components/ui/Button';
 import { TopNav } from '@/components/shell/TopNav';
+import { BottomNav } from '@/components/shell/BottomNav';
+import { Footer } from '@/components/shell/Footer';
 import { Alert } from '@/components/ui/ui';
 import { LAPSED_MESSAGE, planLapsed } from '@/lib/rentals/plans';
 import { homeFor, requireSession } from '@/lib/auth/session';
@@ -36,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Skip to content
       </a>
-      <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+      <header className="sticky top-0 z-40 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-white/85">
         <div className="mx-auto w-full max-w-5xl px-4 md:px-8">
           <div className="flex min-h-16 items-center justify-between gap-4">
             <Logo href={homeFor(session.account.role)} />
@@ -49,7 +51,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </form>
             </div>
           </div>
-          <TopNav items={items} />
+          <div className="hidden sm:block">
+            <TopNav items={items} />
+          </div>
         </div>
       </header>
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 focus:outline-none md:px-8 md:py-10">
@@ -62,12 +66,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
         {children}
       </main>
-      <footer className="border-t border-line bg-white">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-4 py-5 text-sm text-muted sm:flex-row sm:justify-between md:px-8">
-          <p>Rentals</p>
-          <p>{landlord ? 'Your homes, rent, repairs and bills in one place.' : 'Questions about your home? Contact your landlord.'}</p>
-        </div>
-      </footer>
+      <Footer
+        withTabBar
+        links={landlord ? [...items.filter((i) => i.href !== '/notifications'), { href: '/reports/home', label: 'Homeowner tax summary' }] : items}
+        note={landlord ? undefined : 'Your rent, repairs and lease in one place. Questions about your home? Contact your landlord.'}
+      />
+      <BottomNav items={items} />
     </>
   );
 }

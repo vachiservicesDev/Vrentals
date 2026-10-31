@@ -54,7 +54,7 @@ export async function api<T = unknown>(url: string, init: { method?: string; bod
       fieldErrors: res.ok ? {} : fieldErrorsFrom(body),
     };
   } catch {
-    return { ok: false, status: 0, data: null, message: "Couldn't reach Rentals. Check your connection and try again.", fieldErrors: {} };
+    return { ok: false, status: 0, data: null, message: "Couldn't reach Vrentals. Check your connection and try again.", fieldErrors: {} };
   }
 }
 

@@ -259,7 +259,7 @@ function LeasePanel({ lease, state, landlordName, onChange }: { lease: Lease; st
   }
 
   async function endLease() {
-    if (!window.confirm(`End ${lease.tenantName}'s lease? They'll no longer see this home in Rentals. Rent history is kept.`)) return;
+    if (!window.confirm(`End ${lease.tenantName}'s lease? They'll no longer see this home in Vrentals. Rent history is kept.`)) return;
     const result = await action.run('end', `/api/leases/${lease.id}`, { method: 'PATCH', body: { status: 'ended' } });
     if (result.ok) onChange();
   }
@@ -379,7 +379,7 @@ function AgreementSection({ lease, state, landlordName, onChange }: { lease: Lea
                 defaultValue={str('smoking') || 'not_allowed'}
                 id={`f-a-smoke-${lease.id}`}
               />
-              <TextField name="rentPaymentMethod" label="How rent is paid" defaultValue={str('rentPaymentMethod')} hint="Like “Zelle or bank payment in the Rentals app”." errors={action.fieldErrors} id={`f-a-pay-${lease.id}`} />
+              <TextField name="rentPaymentMethod" label="How rent is paid" defaultValue={str('rentPaymentMethod')} hint="Like “Zelle or bank payment in the Vrentals app”." errors={action.fieldErrors} id={`f-a-pay-${lease.id}`} />
             </FieldRow>
             <CheckboxField name="builtBefore1978" label="The home was built before 1978 (adds the lead paint clause)" hint="Before your tenant signs, give them the EPA lead pamphlet and the federal lead disclosure form, signed by both of you. Upload the signed form under Documents." defaultChecked={t.builtBefore1978 === true} id={`f-a-lead-${lease.id}`} />
             <TextAreaField name="extraTerms" label="Additional terms" rows={4} defaultValue={str('extraTerms')} hint="Anything else you both agree to, like snow removal or lawn care." errors={action.fieldErrors} id={`f-a-extra-${lease.id}`} />

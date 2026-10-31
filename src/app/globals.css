@@ -188,3 +188,13 @@
 .print-only {
   display: none;
 }
+
+/* Phones: no grey flash on tap, no font inflation in landscape, no rubber-band reveal behind the tab bar. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}

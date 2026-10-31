@@ -26,7 +26,7 @@ export async function connectLink(owner: Account, appUrl: string): Promise<{ ok:
       type: 'standard',
       email: owner.email,
       country: 'US',
-      business_profile: { product_description: 'Residential rent collected through Rentals', mcc: '6513' },
+      business_profile: { product_description: 'Residential rent collected through Vrentals', mcc: '6513' },
       metadata: { rentalsAccountId: owner.id },
     });
     accountId = created.id;

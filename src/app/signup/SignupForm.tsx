@@ -9,7 +9,7 @@ function friendly(message: string) {
   if (/already registered|already been registered|exists/i.test(message)) return 'That email already has an account. Sign in instead, or reset your password.';
   if (/password/i.test(message)) return 'Choose a longer password: at least 10 characters.';
   if (/rate limit|too many/i.test(message)) return 'Too many attempts. Wait a minute, then try again.';
-  if (/fetch|network/i.test(message)) return "Couldn't reach Rentals. Check your connection and try again.";
+  if (/fetch|network/i.test(message)) return "Couldn't reach Vrentals. Check your connection and try again.";
   return message;
 }
 

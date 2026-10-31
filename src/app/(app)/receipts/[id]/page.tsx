@@ -65,7 +65,7 @@ export default function ReceiptPage() {
       <p className={`mt-6 rounded-md p-3 text-center font-semibold ${paidInFull ? 'bg-green-50 text-green-700' : 'bg-subtle text-ink'}`}>
         {paidInFull ? `${monthLabel(r.period)} rent is paid in full.` : `${formatMoney(r.balance)} is still due for ${monthLabel(r.period)}.`}
       </p>
-      <p className="mt-6 text-sm text-muted">This receipt confirms the payment your landlord recorded in Rentals. Keep it for your records.</p>
+      <p className="mt-6 text-sm text-muted">This receipt confirms the payment your landlord recorded in Vrentals. Keep it for your records.</p>
 
       <div className="no-print mt-8 flex flex-wrap gap-3">
         <Button onClick={() => window.print()}>Print or save as PDF</Button>

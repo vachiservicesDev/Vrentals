@@ -207,12 +207,12 @@ export function StatCard({ href, value, label, hint, tone }: { href: string; val
     <li>
       <Link
         href={href}
-        className="group flex h-full flex-col rounded-lg border border-line bg-white p-5 shadow-[var(--shadow-panel)] transition-colors hover:border-brand-700 sm:p-6"
+        className="group flex h-full flex-col rounded-lg border border-line bg-white p-4 shadow-[var(--shadow-panel)] transition-[border-color,transform] hover:border-brand-700 active:scale-[0.98] sm:p-6"
       >
-        <span className={`font-display text-4xl font-semibold leading-none ${accent}`}>{value}</span>
-        <span className="mt-3 font-medium text-ink group-hover:text-brand-700">{label}</span>
-        {hint && <span className="mt-1 text-sm text-muted">{hint}</span>}
-        <span aria-hidden="true" className="mt-auto pt-4 text-sm font-semibold text-brand-700">
+        <span className={`font-display text-3xl font-semibold leading-none sm:text-4xl ${accent}`}>{value}</span>
+        <span className="mt-3 text-[0.9375rem] font-medium leading-snug text-ink group-hover:text-brand-700 sm:text-base">{label}</span>
+        {hint && <span className="mt-1 text-[0.8125rem] leading-snug text-muted sm:text-sm">{hint}</span>}
+        <span aria-hidden="true" className="mt-auto hidden pt-4 text-sm font-semibold text-brand-700 sm:block">
           Open →
         </span>
       </Link>

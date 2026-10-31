@@ -9,7 +9,7 @@ function friendly(message: string) {
   if (/invalid login credentials/i.test(message)) return "That email and password don't match. Check them and try again, or reset your password.";
   if (/email not confirmed/i.test(message)) return 'This account hasn’t been confirmed yet. Open the link in the email we sent you first.';
   if (/rate limit|too many/i.test(message)) return 'Too many attempts. Wait a minute, then try again.';
-  if (/fetch|network/i.test(message)) return "Couldn't reach Rentals. Check your connection and try again.";
+  if (/fetch|network/i.test(message)) return "Couldn't reach Vrentals. Check your connection and try again.";
   return message;
 }
 

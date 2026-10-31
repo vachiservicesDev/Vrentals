@@ -27,12 +27,12 @@ export function PaymentsPanel() {
     <Panel
       id="payments"
       title="Online rent payments"
-      description="Let tenants pay rent from their bank account (ACH) in Rentals. Payments go through Stripe straight into your bank. Tenants type their bank details on Stripe's secure page only; Rentals never sees or stores them. Stripe charges 0.8% per payment, at most $5, taken from the payment."
+      description="Let tenants pay rent from their bank account (ACH) in Vrentals. Payments go through Stripe straight into your bank. Tenants type their bank details on Stripe's secure page only; Vrentals never sees or stores them. Stripe charges 0.8% per payment, at most $5, taken from the payment."
       actions={s ? s.configured && s.enabled ? <Chip tone="live">On</Chip> : s.configured && s.connected ? <Chip tone="warning">Setup not finished</Chip> : <Chip tone="muted">Off</Chip> : undefined}
     >
       <div className="grid gap-4">
         <FormStatus error={action.error ?? status.error} success={action.success} />
-        {s && !s.configured && <p className="text-muted">Online payments aren&apos;t switched on for Rentals yet.</p>}
+        {s && !s.configured && <p className="text-muted">Online payments aren&apos;t switched on for Vrentals yet.</p>}
         {s?.configured && s.enabled && (
           <p className="text-ink">
             Your tenants see a &quot;Pay by bank&quot; button for rent they owe. Payouts, fees and refunds are in your{' '}
