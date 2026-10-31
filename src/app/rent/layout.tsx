@@ -14,7 +14,7 @@ export default function RentLayout({ children }: { children: React.ReactNode }) 
       </main>
       <footer className="border-t border-line bg-white">
         <div className="mx-auto w-full max-w-3xl px-4 py-5 text-sm text-muted md:px-8">
-          Listed with Rentals. We do business in accordance with the Fair Housing Act and Connecticut fair housing law.
+          Listed with Rentals. We do business in accordance with the federal Fair Housing Act and state and local fair housing laws.
         </div>
       </footer>
     </>

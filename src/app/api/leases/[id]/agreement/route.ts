@@ -26,6 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     {
       tenantName: lease.tenantName,
       tenantEmail: lease.tenantEmail,
+      state: p.state,
       homeName: p.name,
       homeAddress: [p.address, p.city, `${p.state} ${p.zip ?? ''}`.trim()].filter(Boolean).join(', '),
       startDate: lease.startDate,

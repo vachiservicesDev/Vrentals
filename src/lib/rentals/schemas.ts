@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { US_STATES } from './states';
 import { CATEGORIES, type TransactionType } from './money';
 
 const day = z
@@ -13,7 +14,7 @@ export const propertySchema = z.object({
   name: text(150).min(1, 'Give the home a name, like "Unit 12".'),
   address: text(500).min(1, 'Enter the street address.'),
   city: optional(100),
-  state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Use the two-letter state, like CT.').default('CT'),
+  state: z.string().trim().toUpperCase().refine((v) => v in US_STATES, 'Pick the state.').default('CT'),
   zip: z.string().trim().regex(/^\d{5}(-\d{4})?$/, 'Enter a 5-digit ZIP code.').optional(),
   hoaName: optional(150),
   hoaContact: optional(500),

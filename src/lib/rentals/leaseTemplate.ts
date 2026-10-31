@@ -1,16 +1,19 @@
 import { createHash } from 'node:crypto';
 import type { AgreementTerms } from './leasing';
+import { stateName } from './states';
 
 /**
- * The standard Connecticut residential lease, filled in from the lease record and the landlord's
- * extra terms. Plain text with numbered sections, so the signed copy is exactly what both people
- * read. It follows Connecticut's landlord-tenant statutes (Chapter 830) as of 2026; the page tells
- * landlords to have a Connecticut attorney review it before first use.
+ * The residential lease, filled in from the lease record and the landlord's extra terms. Plain text
+ * with numbered sections, so the signed copy is exactly what both people read. For Connecticut homes
+ * it follows Chapter 830 as of 2026, with its numbers and citations. Elsewhere, the clauses that
+ * differ by state defer to that state's law rather than stating numbers we haven't checked. The page
+ * tells landlords to have a local attorney review it before first use.
  */
 
 export interface LeaseFacts {
   tenantName: string;
   tenantEmail: string;
+  state: string;
   homeName: string;
   homeAddress: string;
   startDate: string;
@@ -34,6 +37,8 @@ const SMOKING = {
 };
 
 export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
+  const ct = f.state === 'CT';
+  const law = `${stateName(f.state)} law`;
   const late = f.lateFee && Number(f.lateFee) > 0;
   const deposit = f.securityDeposit && Number(f.securityDeposit) > 0;
   const sections: [string, string][] = [
@@ -44,8 +49,8 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     [
       'Term',
       f.endDate
-        ? `The Lease begins on ${day(f.startDate)} and ends on ${day(f.endDate)}. If Tenant stays after the end date with Landlord's consent and no new lease is signed, the tenancy continues month to month on the same terms, and either party may end it with written notice as Connecticut law requires.`
-        : `The Lease begins on ${day(f.startDate)} and continues month to month. Either party may end it with written notice given at least one full rental period in advance, or as Connecticut law otherwise requires.`,
+        ? `The Lease begins on ${day(f.startDate)} and ends on ${day(f.endDate)}. If Tenant stays after the end date with Landlord's consent and no new lease is signed, the tenancy continues month to month on the same terms, and either party may end it with written notice as ${law} requires.`
+        : `The Lease begins on ${day(f.startDate)} and continues month to month. Either party may end it with written notice given at least one full rental period in advance, or as ${law} otherwise requires.`,
     ],
     [
       'Rent',
@@ -54,13 +59,17 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     [
       'Late Charge',
       late
-        ? `Rent not received within ${f.graceDays} days after it is due is late, and Tenant will owe a late charge of ${money(f.lateFee!)}. As Connecticut law (C.G.S. § 47a-15a) requires, no late charge applies until the ${f.graceDays}-day grace period has passed, and it will never exceed the lesser of $5 for each day rent is late up to $50, or 5% of the late rent.`
+        ? ct
+          ? `Rent not received within ${f.graceDays} days after it is due is late, and Tenant will owe a late charge of ${money(f.lateFee!)}. As Connecticut law (C.G.S. § 47a-15a) requires, no late charge applies until the ${f.graceDays}-day grace period has passed, and it will never exceed the lesser of $5 for each day rent is late up to $50, or 5% of the late rent.`
+          : `Rent not received within ${f.graceDays} days after it is due is late, and Tenant will owe a late charge of ${money(f.lateFee!)}. No late charge will be more than, or charged sooner than, ${law} allows.`
         : `Rent not received within ${f.graceDays} days after it is due is late. No late charge is set in this Lease.`,
     ],
     [
       'Security Deposit',
       deposit
-        ? `Tenant has paid or will pay a security deposit of ${money(f.securityDeposit!)}. It will not exceed two months' rent (or one month's rent if Tenant is 62 or older), as C.G.S. § 47a-21 provides. Landlord will hold it in an escrow account in a Connecticut financial institution and pay interest as the law requires. Within 21 days after the tenancy ends, or 15 days after Tenant gives a forwarding address in writing, whichever is later, Landlord will return the deposit with interest, less any lawful deductions, with an itemized list of any damages deducted. The deposit may not be used by Tenant as the last month's rent.`
+        ? ct
+          ? `Tenant has paid or will pay a security deposit of ${money(f.securityDeposit!)}. It will not exceed two months' rent (or one month's rent if Tenant is 62 or older), as C.G.S. § 47a-21 provides. Landlord will hold it in an escrow account in a Connecticut financial institution and pay interest as the law requires. Within 21 days after the tenancy ends, or 15 days after Tenant gives a forwarding address in writing, whichever is later, Landlord will return the deposit with interest, less any lawful deductions, with an itemized list of any damages deducted. The deposit may not be used by Tenant as the last month's rent.`
+          : `Tenant has paid or will pay a security deposit of ${money(f.securityDeposit!)}. Landlord will hold it, and pay any interest on it, as ${law} requires. After the tenancy ends, and within the time ${law} sets, Landlord will return the deposit less any lawful deductions, with an itemized list of any damages deducted. The deposit may not be used by Tenant as the last month's rent.`
         : 'No security deposit is required.',
     ],
     [
@@ -69,7 +78,7 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     ],
     [
       "Landlord's Duties",
-      'Landlord will comply with building and housing codes affecting health and safety; make all repairs needed to keep the Premises fit and livable; keep common areas clean and safe; keep in good working order all electrical, plumbing, heating, ventilating and other systems and appliances Landlord supplies; supply running water and reasonable heat and hot water; and provide working smoke and carbon monoxide detectors, as C.G.S. § 47a-7 requires.',
+      `Landlord will comply with building and housing codes affecting health and safety; make all repairs needed to keep the Premises fit and livable; keep common areas clean and safe; keep in good working order all electrical, plumbing, heating, ventilating and other systems and appliances Landlord supplies; supply running water and reasonable heat and hot water; and provide working smoke and carbon monoxide detectors, as ${ct ? 'C.G.S. § 47a-7' : law} requires.`,
     ],
     [
       "Tenant's Duties",
@@ -77,7 +86,7 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     ],
     [
       'Entry by Landlord',
-      'Landlord may enter at reasonable times, after giving reasonable notice, to inspect, make repairs or show the Premises, as C.G.S. § 47a-16 provides. Landlord may enter without notice in an emergency. Landlord will not abuse the right of entry or use it to harass Tenant.',
+      `Landlord may enter at reasonable times, after giving reasonable notice, to inspect, make repairs or show the Premises, as ${ct ? 'C.G.S. § 47a-16 provides' : `${law} provides, including any minimum notice it requires`}. Landlord may enter without notice in an emergency. Landlord will not abuse the right of entry or use it to harass Tenant.`,
     ],
     ['Pets', t.pets ? t.pets : 'No pets are allowed without Landlord\'s written consent. Assistance animals for a person with a disability are not pets and are allowed as fair housing law requires.'],
     ['Smoking', SMOKING[t.smoking]],
@@ -93,7 +102,7 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     ],
     [
       'Bed Bugs',
-      'Landlord is not aware of any current bed bug infestation in the Premises. Tenant will promptly tell Landlord about any suspected bed bugs, and Landlord will inspect and treat as C.G.S. § 47a-7a requires.',
+      `Landlord is not aware of any current bed bug infestation in the Premises. Tenant will promptly tell Landlord about any suspected bed bugs, and Landlord will inspect and treat as ${ct ? 'C.G.S. § 47a-7a' : law} requires.`,
     ],
     ...(t.builtBefore1978
       ? ([
@@ -109,16 +118,16 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     ],
     [
       'Ending the Lease',
-      'At the end of the tenancy Tenant will return all keys and leave the Premises clean and in the same condition as at the start, except for normal wear and tear. Landlord may end the tenancy only as Connecticut law allows, through a court process.',
+      `At the end of the tenancy Tenant will return all keys and leave the Premises clean and in the same condition as at the start, except for normal wear and tear. Landlord may end the tenancy only as ${law} allows, through a court process.`,
     ],
     ...(t.extraTerms ? ([['Additional Terms', t.extraTerms]] as [string, string][]) : []),
     [
       'Whole Agreement and Signatures',
-      'This Lease is the whole agreement between Landlord and Tenant. Any change must be in writing and signed by both. If any part of this Lease is found invalid, the rest stays in effect. Connecticut law governs this Lease. Landlord and Tenant agree to sign electronically, and electronic signatures have the same effect as signatures on paper.',
+      `This Lease is the whole agreement between Landlord and Tenant. Any change must be in writing and signed by both. If any part of this Lease is found invalid, the rest stays in effect. ${law} governs this Lease. Landlord and Tenant agree to sign electronically, and electronic signatures have the same effect as signatures on paper.`,
     ],
   ];
   return [
-    'CONNECTICUT RESIDENTIAL LEASE',
+    `${stateName(f.state).toUpperCase()} RESIDENTIAL LEASE`,
     '',
     ...sections.flatMap(([title, body], i) => [`${i + 1}. ${title.toUpperCase()}`, body, '']),
   ]
