@@ -6,9 +6,11 @@ import { requireLandlord } from '@/lib/auth/guards';
 import { notify } from '@/lib/notify';
 import { syncRepairExpense } from '@/lib/rentals/ledger';
 import { dec, repairUpdateSchema } from '@/lib/rentals/schemas';
+import { stateTimeZone } from '@/lib/rentals/states';
 
-const visitTime = (iso: Date) =>
-  iso.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
+/** The visit time on the home's own clock, like "Tuesday, November 3, 2:00 PM CST". */
+const visitTime = (iso: Date, state: string) =>
+  iso.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: stateTimeZone(state), timeZoneName: 'short' });
 
 /**
  * Schedules, updates or closes a repair. Setting a visit time moves an open repair to
@@ -20,7 +22,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!/^[0-9a-f-]{36}$/i.test(params.id)) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   const [found] = await db
-    .select({ repair: repairRequests })
+    .select({ repair: repairRequests, state: properties.state })
     .from(repairRequests)
     .innerJoin(properties, eq(properties.id, repairRequests.propertyId))
     .where(and(eq(repairRequests.id, params.id), eq(properties.ownerId, gate.ownerId)))
@@ -67,7 +69,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       await notify({
         accountId: tenant,
         title: 'Repair visit scheduled',
-        message: `"${repair.title}": a visit is set for ${visitTime(repair.appointmentAt!)}${repair.vendorName ? ` with ${repair.vendorName}` : ''}.`,
+        message: `"${repair.title}": a visit is set for ${visitTime(repair.appointmentAt!, found.state)}${repair.vendorName ? ` with ${repair.vendorName}` : ''}.`,
         link: '/home',
       });
     }

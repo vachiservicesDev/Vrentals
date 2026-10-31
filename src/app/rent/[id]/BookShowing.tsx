@@ -13,10 +13,9 @@ interface Slot {
   minutes: number;
 }
 
-const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
-const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
-
-export function BookShowing({ listingId, slots }: { listingId: string; slots: Slot[] }) {
+export function BookShowing({ listingId, timeZone, slots }: { listingId: string; timeZone: string; slots: Slot[] }) {
+  const dayOf = (iso: string) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone });
+  const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone });
   const action = useAction();
   const [chosen, setChosen] = useState<string>('');
   const [booked, setBooked] = useState<Slot | null>(null);

@@ -72,7 +72,7 @@ export default function AgreementPage() {
         {a.status === 'void' && <Alert title="This lease was voided">It&apos;s kept for the record but isn&apos;t in effect.</Alert>}
         {as === 'landlord' && a.status === 'draft' && (
           <Alert tone="info" title="Check it, then sign">
-            Read the whole lease. To change something, edit the terms on the home page and prepare it again. When you sign, your tenant is asked to sign too. Have a Connecticut attorney review this template before you first use it.
+            Read the whole lease. To change something, edit the terms on the home page and prepare it again. When you sign, your tenant is asked to sign too. Have a local landlord-tenant attorney review this template before you first use it.
           </Alert>
         )}
 
