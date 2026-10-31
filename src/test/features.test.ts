@@ -38,7 +38,7 @@ const storage = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/storage', () => storage);
 
-const stripeApi = vi.hoisted(() => ({ checkout: { sessions: { create: vi.fn() } }, accounts: { retrieve: vi.fn(), create: vi.fn() }, accountLinks: { create: vi.fn() } }));
+const stripeApi = vi.hoisted(() => ({ checkout: { sessions: { create: vi.fn(), retrieve: vi.fn(), expire: vi.fn() } }, accounts: { retrieve: vi.fn(), create: vi.fn() }, accountLinks: { create: vi.fn() } }));
 vi.mock('@/lib/stripe', () => ({ paymentsConfigured: () => true, stripe: () => stripeApi, webhookEvent: vi.fn() }));
 
 const params = (id: string) => ({ params: { id } });
@@ -237,6 +237,23 @@ describe('landlord plans', () => {
 });
 
 describe('online rent payments', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('opens a new checkout once the old one has expired', async () => {
+    const { owner, tenant } = await setup();
+    await generateRent(jsonRequest({ month: '2026-11' }));
+    const [charge] = await db.select().from(rentCharges);
+    await db.update(accounts).set({ stripeAccountId: 'acct_owner', stripeChargesEnabled: true }).where(eq(accounts.id, owner.id));
+    setCurrentUser(tenant.id);
+    stripeApi.checkout.sessions.create.mockResolvedValueOnce({ id: 'cs_a', url: 'https://checkout.stripe.com/c/cs_a' });
+    await payRoute(jsonRequest({}), params(charge.id));
+    stripeApi.checkout.sessions.retrieve.mockResolvedValueOnce({ id: 'cs_a', status: 'expired', url: null });
+    stripeApi.checkout.sessions.create.mockResolvedValueOnce({ id: 'cs_b', url: 'https://checkout.stripe.com/c/cs_b' });
+    expect(await json(await payRoute(jsonRequest({}), params(charge.id)))).toEqual({ url: 'https://checkout.stripe.com/c/cs_b' });
+    const rows = await db.select().from(rentPayments);
+    expect(rows.map((r) => r.status).sort()).toEqual(['expired', 'started']);
+  });
+
   it('starts a bank payment on the landlord’s Stripe account and adds it to the month once Stripe confirms', async () => {
     const { owner, tenant } = await setup();
     await generateRent(jsonRequest({ month: '2026-11' }));
@@ -255,6 +272,12 @@ describe('online rent payments', () => {
     expect(opts).toMatchObject({ stripeAccount: 'acct_owner' });
     const [payment] = await db.select().from(rentPayments);
 
+    // Starting again while that checkout is still open reuses it instead of opening a second one.
+    stripeApi.checkout.sessions.retrieve.mockResolvedValueOnce({ id: 'cs_1', status: 'open', url: 'https://checkout.stripe.com/c/cs_1' });
+    expect(await json(await payRoute(jsonRequest({}), params(charge.id)))).toEqual({ url: 'https://checkout.stripe.com/c/cs_1' });
+    expect(stripeApi.checkout.sessions.create).toHaveBeenCalledTimes(1);
+    expect(await db.select().from(rentPayments)).toHaveLength(1);
+
     const session = (type: string, extra = {}) =>
       ({ type, account: 'acct_owner', data: { object: { id: 'cs_1', payment_intent: 'pi_1', payment_status: 'unpaid', metadata: { rentPaymentId: payment.id }, ...extra } } }) as any;
 
@@ -270,6 +293,7 @@ describe('online rent payments', () => {
     await handleStripeEvent(session('checkout.session.async_payment_succeeded', { payment_status: 'paid' }), 'https://app');
     await handleStripeEvent(session('checkout.session.async_payment_succeeded', { payment_status: 'paid' }), 'https://app'); // repeated by Stripe
     const [paid] = await db.select().from(rentCharges);
+    expect((await db.select().from(rentPayments))[0].status).toBe('succeeded');
     expect(paid).toMatchObject({ paidAmount: '2400.00', paymentMethod: 'bank_transfer' });
     const receipts = await db.select().from(notifications).where(eq(notifications.accountId, tenant.id));
     expect(receipts.filter((n) => n.title === 'Rent received for November 2026')).toHaveLength(1);

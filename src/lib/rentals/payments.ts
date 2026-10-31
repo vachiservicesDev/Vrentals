@@ -79,10 +79,31 @@ export async function startRentPayment(tenant: Account, chargeId: string, appUrl
   if (!payee) return { ok: false, status: 409, message: "Your landlord hasn't set up online payments. Pay them the usual way." };
   if ((await pendingPayments([d.charge.id])).length) return { ok: false, status: 409, message: 'A bank payment for this month is already on its way. It takes a few business days.' };
 
+  // A checkout already open for this month is reused, so the tenant can't end up paying twice.
+  const [started] = await db
+    .select()
+    .from(rentPayments)
+    .where(and(eq(rentPayments.chargeId, d.charge.id), eq(rentPayments.status, 'started')))
+    .limit(1);
+  if (started) {
+    const open = started.stripeSessionId
+      ? await stripe()
+          .checkout.sessions.retrieve(started.stripeSessionId, { stripeAccount: started.stripeAccountId })
+          .catch(() => null)
+      : null;
+    if (open?.status === 'open' && open.url && started.amount === owed.toFixed(2)) return { ok: true, url: open.url };
+    if (open?.status === 'open') await stripe().checkout.sessions.expire(open.id, { stripeAccount: started.stripeAccountId });
+    if (open?.status === 'complete') return { ok: false, status: 409, message: 'A bank payment for this month is already on its way. It takes a few business days.' };
+    await db.update(rentPayments).set({ status: 'expired', updatedAt: new Date() }).where(and(eq(rentPayments.id, started.id), eq(rentPayments.status, 'started')));
+  }
+
+  // The unique index on active payments stops two clicks at once from both getting through.
   const [payment] = await db
     .insert(rentPayments)
     .values({ chargeId: d.charge.id, payerId: tenant.id, amount: owed.toFixed(2), stripeAccountId: payee.accountId })
+    .onConflictDoNothing()
     .returning();
+  if (!payment) return { ok: false, status: 409, message: 'A payment for this month is already being set up. Refresh the page and try again.' };
   const session = await stripe().checkout.sessions.create(
     {
       mode: 'payment',
@@ -121,16 +142,21 @@ const intentId = (session: Stripe.Checkout.Session) => (typeof session.payment_i
 
 /** The money arrived: add it to the month (once, however often Stripe repeats the event) and send a receipt. */
 async function settle(payment: typeof rentPayments.$inferSelect, session: Stripe.Checkout.Session, appUrl: string) {
-  const [won] = await db
-    .update(rentPayments)
-    .set({ status: 'succeeded', stripePaymentIntentId: intentId(session), updatedAt: new Date() })
-    .where(and(eq(rentPayments.id, payment.id), ne(rentPayments.status, 'succeeded')))
-    .returning();
+  // One transaction: the payment is never marked done without the month being credited.
+  const won = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(rentPayments)
+      .set({ status: 'succeeded', stripePaymentIntentId: intentId(session), updatedAt: new Date() })
+      .where(and(eq(rentPayments.id, payment.id), ne(rentPayments.status, 'succeeded')))
+      .returning();
+    if (!row) return false;
+    await tx
+      .update(rentCharges)
+      .set({ paidAmount: sql`${rentCharges.paidAmount} + ${payment.amount}`, paidOn: todayEastern(), paymentMethod: 'bank_transfer', updatedAt: new Date() })
+      .where(eq(rentCharges.id, payment.chargeId));
+    return true;
+  });
   if (!won) return;
-  await db
-    .update(rentCharges)
-    .set({ paidAmount: sql`${rentCharges.paidAmount} + ${payment.amount}`, paidOn: todayEastern(), paymentMethod: 'bank_transfer', updatedAt: new Date() })
-    .where(eq(rentCharges.id, payment.chargeId));
   const d = await chargeDetails(payment.chargeId);
   if (!d) return;
   await sendReceipt(d, appUrl);

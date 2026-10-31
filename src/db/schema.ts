@@ -1,4 +1,5 @@
-import { type AnyPgColumn, bigint, boolean, date, decimal, integer, pgSchema, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { type AnyPgColumn, bigint, boolean, date, decimal, integer, pgSchema, text, timestamp, unique, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 /**
  * Everything lives in its own Postgres schema, `rentals`, so it never mixes with other apps'
@@ -186,21 +187,26 @@ export const transactions = rentals.table(
  * A tenant's online rent payment (a bank debit through Stripe). A bank payment takes a few business
  * days: it stays 'processing' until Stripe confirms it, and only then counts toward the month.
  */
-export const rentPayments = rentals.table('rent_payments', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  chargeId: uuid('charge_id')
-    .notNull()
-    .references(() => rentCharges.id, { onDelete: 'cascade' }),
-  payerId: uuid('payer_id').references(() => accounts.id, { onDelete: 'set null' }),
-  amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
-  status: varchar('status', { length: 12 }).notNull().default('started'), // 'started' | 'processing' | 'succeeded' | 'failed' | 'expired'
-  stripeAccountId: varchar('stripe_account_id', { length: 64 }).notNull(),
-  stripeSessionId: varchar('stripe_session_id', { length: 255 }).unique(),
-  stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
-  failureMessage: text('failure_message'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const rentPayments = rentals.table(
+  'rent_payments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    chargeId: uuid('charge_id')
+      .notNull()
+      .references(() => rentCharges.id, { onDelete: 'cascade' }),
+    payerId: uuid('payer_id').references(() => accounts.id, { onDelete: 'set null' }),
+    amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
+    status: varchar('status', { length: 12 }).notNull().default('started'), // 'started' | 'processing' | 'succeeded' | 'failed' | 'expired'
+    stripeAccountId: varchar('stripe_account_id', { length: 64 }).notNull(),
+    stripeSessionId: varchar('stripe_session_id', { length: 255 }).unique(),
+    stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
+    failureMessage: text('failure_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // At most one payment under way per month, so two checkouts can never both be paid.
+  (t) => ({ oneActive: uniqueIndex('rent_payments_one_active_idx').on(t.chargeId).where(sql`${t.status} in ('started', 'processing')`) }),
+);
 
 /**
  * Private papers for a home: insurance policies, HOA and tax bills, the deed, the signed lease.
