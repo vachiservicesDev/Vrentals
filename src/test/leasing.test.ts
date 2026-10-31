@@ -180,6 +180,7 @@ describe('written lease', () => {
     expect(text).toContain('Rent is $2,400.00 per month, due in advance on the 1st day');
     expect(text).toContain('C.G.S. § 47a-15a');
     expect(text).toContain('LEAD-BASED PAINT DISCLOSURE');
+    expect(text).toContain('before Tenant signs this Lease Landlord must give Tenant the EPA pamphlet');
     expect(sha256(text)).toMatch(/^[0-9a-f]{64}$/);
     expect(sameName('ravi  PEDDYREDDY', 'Ravi Peddyreddy')).toBe(true);
     expect(sameName('Ravi P', 'Ravi Peddyreddy')).toBe(false);
@@ -228,6 +229,16 @@ describe('written lease', () => {
     expect(final.agreement).toMatchObject({ status: 'signed', landlordName: 'ravi peddyreddy', tenantName: 'Jamie Lee', landlordSignedIp: '203.0.113.7', tenantSignedIp: '198.51.100.4' });
     const homeView = await json(await getHome(getRequest(), params(home.id)));
     expect(homeView.leases[0].agreement).toMatchObject({ id: draft.id, status: 'signed' });
+  });
+
+  it("can't be signed once the lease has ended", async () => {
+    const { owner, tenant, lease } = await leased();
+    const draft = (await json(await prepare(jsonRequest(terms), params(lease.id)))).agreement;
+    await sign(signed('Ravi Peddyreddy'), params(draft.id));
+    setCurrentUser(owner.id);
+    await db.execute(`update rentals.leases set status = 'ended' where id = '${lease.id}'` as never);
+    setCurrentUser(tenant.id);
+    expect((await sign(signed('Jamie Lee'), params(draft.id))).status).toBe(409);
   });
 
   it('refuses to sign text that changed after it was prepared', async () => {

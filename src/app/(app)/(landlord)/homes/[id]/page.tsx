@@ -362,7 +362,7 @@ function AgreementSection({ lease, landlordName, onChange }: { lease: Lease; lan
               />
               <TextField name="rentPaymentMethod" label="How rent is paid" defaultValue={str('rentPaymentMethod')} hint="Like “Zelle or bank payment in the Rentals app”." errors={action.fieldErrors} id={`f-a-pay-${lease.id}`} />
             </FieldRow>
-            <CheckboxField name="builtBefore1978" label="The home was built before 1978 (adds the lead paint disclosure)" defaultChecked={t.builtBefore1978 === true} id={`f-a-lead-${lease.id}`} />
+            <CheckboxField name="builtBefore1978" label="The home was built before 1978 (adds the lead paint clause)" hint="Before your tenant signs, give them the EPA lead pamphlet and the federal lead disclosure form, signed by both of you. Upload the signed form under Documents." defaultChecked={t.builtBefore1978 === true} id={`f-a-lead-${lease.id}`} />
             <TextAreaField name="extraTerms" label="Additional terms" rows={4} defaultValue={str('extraTerms')} hint="Anything else you both agree to, like snow removal or lawn care." errors={action.fieldErrors} id={`f-a-extra-${lease.id}`} />
             <div>
               <Button type="submit" busy={action.busy === 'prepare'} busyLabel="Preparing…">

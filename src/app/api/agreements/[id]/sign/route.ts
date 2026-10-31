@@ -23,6 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (!body.success) return NextResponse.json({ message: 'Invalid input', errors: body.error.flatten() }, { status: 400 });
 
   const { agreement: a, lease, property, as } = found;
+  if (lease.status !== 'active') return NextResponse.json({ message: 'This lease has ended, so it can no longer be signed.' }, { status: 409 });
   if (sha256(a.body) !== a.bodySha256) return NextResponse.json({ message: 'This lease changed after it was prepared. Prepare it again.' }, { status: 409 });
   const ip = clientIp(request.headers);
   const name = body.data.signedName;

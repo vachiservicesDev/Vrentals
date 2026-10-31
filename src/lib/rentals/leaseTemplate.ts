@@ -99,7 +99,7 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
       ? ([
           [
             'Lead-Based Paint Disclosure',
-            'The Premises were built before 1978 and may contain lead-based paint. Landlord has given Tenant the EPA pamphlet "Protect Your Family From Lead in Your Home" and the separate federal lead disclosure form, and has disclosed any known lead-based paint, hazards, records and reports.',
+            'The Premises were built before 1978 and may contain lead-based paint. As federal law requires, before Tenant signs this Lease Landlord must give Tenant the EPA pamphlet "Protect Your Family From Lead in Your Home" and a separate lead-based paint disclosure form, signed by both, that lists any lead-based paint, hazards, records and reports known to Landlord. That signed form is part of this Lease.',
           ],
         ] as [string, string][])
       : []),
