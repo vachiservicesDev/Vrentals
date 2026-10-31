@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { leases, properties, repairRequests } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
 import { notify } from '@/lib/notify';
+import { syncRepairExpense } from '@/lib/rentals/ledger';
 import { dec, repairUpdateSchema } from '@/lib/rentals/schemas';
 
 const visitTime = (iso: Date) =>
@@ -14,7 +15,7 @@ const visitTime = (iso: Date) =>
  * "scheduled", and the tenant is told about the visit and when the repair is marked done.
  */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
   if (!/^[0-9a-f-]{36}$/i.test(params.id)) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
@@ -22,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     .select({ repair: repairRequests })
     .from(repairRequests)
     .innerJoin(properties, eq(properties.id, repairRequests.propertyId))
-    .where(and(eq(repairRequests.id, params.id), eq(properties.ownerId, gate.account.id)))
+    .where(and(eq(repairRequests.id, params.id), eq(properties.ownerId, gate.ownerId)))
     .limit(1);
   if (!found) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   const before = found.repair;
@@ -49,6 +50,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     })
     .where(eq(repairRequests.id, before.id))
     .returning();
+
+  await syncRepairExpense(repair);
 
   // The tenant on the home's current lease hears about a new visit time and the finished repair.
   const [lease] = await db

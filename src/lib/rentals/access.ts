@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { leases, properties, reminders } from '@/db/schema';
+import { documents, leases, properties, reminders, transactions } from '@/db/schema';
 
 /** A property, only when it belongs to `ownerId`. Every landlord route goes through this. */
 export async function ownedProperty(ownerId: string, propertyId: string) {
@@ -47,4 +47,28 @@ export async function ownedReminder(ownerId: string, id: string) {
     .where(and(eq(reminders.id, id), eq(properties.ownerId, ownerId)))
     .limit(1);
   return row?.reminder ?? null;
+}
+
+/** A ledger entry, only when its home belongs to the caller. */
+export async function ownedTransaction(ownerId: string, id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await db
+    .select({ transaction: transactions })
+    .from(transactions)
+    .innerJoin(properties, eq(properties.id, transactions.propertyId))
+    .where(and(eq(transactions.id, id), eq(properties.ownerId, ownerId)))
+    .limit(1);
+  return row?.transaction ?? null;
+}
+
+/** A document, only when its home belongs to the caller. */
+export async function ownedDocument(ownerId: string, id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await db
+    .select({ document: documents })
+    .from(documents)
+    .innerJoin(properties, eq(properties.id, documents.propertyId))
+    .where(and(eq(documents.id, id), eq(properties.ownerId, ownerId)))
+    .limit(1);
+  return row?.document ?? null;
 }

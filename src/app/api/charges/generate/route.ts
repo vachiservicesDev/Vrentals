@@ -13,7 +13,7 @@ const schema = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Pi
  * again: a lease that already has that month is skipped, so nothing is ever charged twice.
  */
 export async function POST(request: NextRequest) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
   const body = schema.safeParse(await request.json());
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     .select({ lease: leases })
     .from(leases)
     .innerJoin(properties, eq(properties.id, leases.propertyId))
-    .where(and(eq(properties.ownerId, gate.account.id), eq(leases.status, 'active')));
+    .where(and(eq(properties.ownerId, gate.ownerId), eq(leases.status, 'active')));
 
   const rows = leaseRows
     .map((r) => r.lease)

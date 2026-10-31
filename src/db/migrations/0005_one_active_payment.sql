@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "rent_payments_one_active_idx" ON "rentals"."rent_payments" USING btree ("charge_id") WHERE "rentals"."rent_payments"."status" in ('started', 'processing');

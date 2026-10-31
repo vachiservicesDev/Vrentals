@@ -22,7 +22,7 @@ export async function GET() {
   const homes = await db
     .select({ id: properties.id, name: properties.name })
     .from(properties)
-    .where(eq(properties.ownerId, gate.account.id));
+    .where(eq(properties.ownerId, gate.ownerId));
   const ids = homes.map((h) => h.id);
   const nameOf = new Map(homes.map((h) => [h.id, h.name]));
   if (!ids.length) return NextResponse.json({ homes: 0, occupied: 0, month, expected: 0, collected: 0, behind: [], repairs: [], reminders: [] });

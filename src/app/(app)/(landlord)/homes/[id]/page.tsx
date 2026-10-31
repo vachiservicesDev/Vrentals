@@ -4,9 +4,12 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, formValues, useAction, useResource } from '@/lib/client/api';
 import { PAYMENT_METHODS, REMINDER_KINDS, REMINDER_REPEATS, REPAIR_STATUSES, REPAIR_URGENCIES, labelFrom, statusOf } from '@/lib/status';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
+import { receiptText, reminderText, smsLink } from '@/lib/rentals/messages';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
+import { MoneyPanel } from '@/components/money/MoneyPanel';
+import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, When, formatMoney } from '@/components/ui/ui';
 
 interface Property {
@@ -19,6 +22,9 @@ interface Property {
   hoaName: string | null;
   hoaContact: string | null;
   notes: string | null;
+  purchasePrice: string | null;
+  landValue: string | null;
+  placedInService: string | null;
 }
 interface Lease {
   id: string;
@@ -46,6 +52,7 @@ interface Charge {
   paymentMethod: string | null;
   note: string | null;
   status: string;
+  processing: string | null;
 }
 interface Repair {
   id: string;
@@ -74,6 +81,7 @@ interface Reminder {
 }
 interface Detail {
   property: Property;
+  landlordName: string | null;
   leases: Lease[];
   charges: Charge[];
   repairs: Repair[];
@@ -82,6 +90,14 @@ interface Detail {
 
 const monthLabel = (period: string) => new Date(`${period}T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
+
+/** Changes whenever a repair's cost or status, or a bill's due date, changes: each can add an expense. */
+function moneyKey(repairs: Repair[], reminders: Reminder[]) {
+  const text = [...repairs.map((r) => `${r.id}${r.status}${r.cost}`), ...reminders.map((r) => `${r.id}${r.dueDate}${r.doneAt}`)].join('|');
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  return hash.toString(36);
+}
 
 /** "2026-11-04T14:30:00.000Z" → the value a datetime-local input expects, in the viewer's time. */
 function toLocalInput(iso: string | null) {
@@ -105,7 +121,7 @@ export default function RentalHomePage() {
       </>
     );
 
-  const { property, leases, charges, repairs, reminders } = data;
+  const { property, landlordName, leases, charges, repairs, reminders } = data;
   const lease = leases.find((l) => l.status === 'active') ?? null;
   const past = leases.filter((l) => l.status !== 'active');
   const address = [property.address, property.city, `${property.state} ${property.zip ?? ''}`.trim()].filter(Boolean).join(', ');
@@ -115,9 +131,15 @@ export default function RentalHomePage() {
       <PageHeader back={back} eyebrow="Rental home" title={property.name} lead={address} actions={lease ? <Chip tone="live">Occupied</Chip> : <Chip tone="new">Vacant</Chip>} />
       <div className="grid gap-8">
         {lease ? <LeasePanel lease={lease} onChange={reload} /> : <NewLeasePanel propertyId={property.id} onChange={reload} />}
-        {lease && <RentPanel lease={lease} charges={charges.filter((c) => c.leaseId === lease.id)} onChange={reload} />}
+        {lease && <RentPanel lease={lease} home={property.name} landlordName={landlordName} charges={charges.filter((c) => c.leaseId === lease.id)} onChange={reload} />}
         <RepairsPanel propertyId={property.id} repairs={repairs} onChange={reload} />
         <RemindersPanel propertyId={property.id} reminders={reminders} onChange={reload} />
+        <MoneyPanel
+          propertyId={property.id}
+          // Paying a bill or fixing a repair with a cost adds an expense, so refresh with them.
+          reloadKey={moneyKey(repairs, reminders)}
+        />
+        <DocumentsPanel propertyId={property.id} />
         <HomePanel property={property} onChange={reload} onDeleted={() => router.push('/dashboard')} />
         {past.length > 0 && (
           <section>
@@ -177,6 +199,8 @@ function LeasePanel({ lease, onChange }: { lease: Lease; onChange: () => void })
     if (result.data.link) {
       setLink(result.data.link);
       action.setSuccess('Invite link created. Text or email it to your tenant; it works once and expires in 24 hours.');
+    } else if (result.data.outcome === 'existing') {
+      action.setSuccess(`${lease.tenantEmail} already has a login, so they can sign in with their own password now. If they forgot it, they can use "Forgot password" on the sign-in page.`);
     } else {
       action.setSuccess(`Invite emailed to ${lease.tenantEmail}.`);
     }
@@ -276,7 +300,7 @@ function NewLeasePanel({ propertyId, onChange }: { propertyId: string; onChange:
   );
 }
 
-function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge[]; onChange: () => void }) {
+function RentPanel({ lease, home, landlordName, charges, onChange }: { lease: Lease; home: string; landlordName: string | null; charges: Charge[]; onChange: () => void }) {
   const action = useAction();
   const open = charges.filter((c) => c.status !== 'paid');
   const [chosen, setChosen] = useState<string>('');
@@ -312,7 +336,16 @@ function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge
               { header: 'Rent', align: 'right', cell: (c) => formatMoney(c.amount) },
               { header: 'Paid', align: 'right', cell: (c) => formatMoney(c.paidAmount) },
               { header: 'Paid on', cell: (c) => (c.paidOn ? <><When iso={c.paidOn} />{c.paymentMethod ? ` · ${labelFrom(PAYMENT_METHODS, c.paymentMethod)}` : ''}</> : '—') },
-              { header: 'Status', cell: (c) => <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip> },
+              {
+                header: 'Status',
+                cell: (c) => (
+                  <span className="inline-flex flex-wrap gap-1.5">
+                    <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip>
+                    {c.processing && <Chip tone="info">{formatMoney(c.processing)} bank payment on its way</Chip>}
+                  </span>
+                ),
+              },
+              { header: 'Tenant', align: 'right', cell: (c) => <ChargeActions charge={c} lease={lease} home={home} landlordName={landlordName} /> },
             ]}
           />
         )}
@@ -356,6 +389,37 @@ function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge
         )}
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Receipt and reminder shortcuts for one month. "Text" opens the landlord's own messages app with the
+ * words filled in, so it comes from their number and costs nothing.
+ */
+function ChargeActions({ charge: c, lease, home, landlordName }: { charge: Charge; lease: Lease; home: string; landlordName: string | null }) {
+  const paid = Number(c.paidAmount) > 0;
+  const owed = c.status !== 'paid';
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  const base = { tenantName: lease.tenantName, landlordName, home, period: c.period, amount: c.amount, paidAmount: c.paidAmount };
+  return (
+    <span className="no-print inline-flex flex-wrap justify-end gap-2">
+      {paid && (
+        <a href={`/receipts/${c.id}`} className={buttonClass('secondary', 'sm')}>
+          Receipt
+        </a>
+      )}
+      {paid && lease.tenantPhone && (
+        <a href={smsLink(lease.tenantPhone, receiptText({ ...base, paidOn: c.paidOn, paymentMethod: c.paymentMethod }, lease.tenantId ? `${origin}/receipts/${c.id}` : undefined))} className={buttonClass('ghost', 'sm')}>
+          Text receipt
+        </a>
+      )}
+      {owed && lease.tenantPhone && (
+        <a href={smsLink(lease.tenantPhone, reminderText({ ...base, dueDate: c.dueDate, late: c.status === 'late' }))} className={buttonClass('ghost', 'sm')}>
+          Text reminder
+        </a>
+      )}
+      {!paid && !(owed && lease.tenantPhone) && <span className="text-sm text-muted">—</span>}
+    </span>
   );
 }
 
@@ -506,7 +570,7 @@ function RemindersPanel({ propertyId, reminders, onChange }: { propertyId: strin
 
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <Panel id="reminders" title="Insurance, HOA and bills" description="Renewals and dues for this home. Repeating ones roll to the next date when you mark them paid.">
+    <Panel id="reminders" title="Insurance, HOA and bills" description="Renewals and dues for this home. Marking one paid records it under Money; repeating ones then roll to the next date.">
       <div className="grid gap-6">
         {rowError && <Alert>{rowError}</Alert>}
         {active.length === 0 ? (
@@ -584,7 +648,9 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     // Send empty values too, so clearing a field sticks.
-    const body = Object.fromEntries(['name', 'address', 'city', 'state', 'hoaName', 'hoaContact', 'notes'].map((k) => [k, String(fd.get(k) ?? '').trim()]));
+    const body = Object.fromEntries(
+      ['name', 'address', 'city', 'state', 'hoaName', 'hoaContact', 'notes', 'purchasePrice', 'landValue', 'placedInService'].map((k) => [k, String(fd.get(k) ?? '').trim()]),
+    );
     const zip = String(fd.get('zip') ?? '').trim();
     const result = await action.run('save', `/api/properties/${property.id}`, { method: 'PATCH', body: zip ? { ...body, zip } : body }, 'Home details saved.');
     if (result.ok) onChange();
@@ -597,7 +663,7 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
   }
 
   return (
-    <Panel title="Home details and HOA">
+    <Panel title="Home details, HOA and depreciation">
       <form onSubmit={save} noValidate className="grid gap-5">
         <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ name: 'Name', address: 'Street address', zip: 'ZIP code' }} />
         <FieldRow>
@@ -614,6 +680,15 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
           <TextAreaField name="hoaContact" label="HOA contact" rows={2} defaultValue={property.hoaContact} errors={action.fieldErrors} id="f-home-hoaContact" />
         </FieldRow>
         <TextAreaField name="notes" label="Notes" rows={3} defaultValue={property.notes} hint="Appliances, paint colors, alarm codes, anything worth keeping." errors={action.fieldErrors} id="f-home-notes" />
+        <fieldset className="grid gap-4 rounded-lg border border-line p-4">
+          <legend className="px-1 font-semibold text-ink">For depreciation</legend>
+          <p className="text-sm text-ink-2">The IRS lets you deduct the building&apos;s cost over 27.5 years. Fill these in once and the yearly report estimates it for you. Your closing statement and town assessment have the numbers.</p>
+          <FieldRow cols={3}>
+            <TextField name="purchasePrice" label="Purchase price ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.purchasePrice} hint="Plus closing costs you paid." errors={action.fieldErrors} id="f-home-purchasePrice" />
+            <TextField name="landValue" label="Land value ($)" type="number" inputMode="decimal" min={0} step="0.01" defaultValue={property.landValue} hint="Land doesn't depreciate. The town assessment splits land and building." errors={action.fieldErrors} id="f-home-landValue" />
+            <TextField name="placedInService" label="First ready to rent" type="date" defaultValue={property.placedInService} hint="The day it was first available for rent." errors={action.fieldErrors} id="f-home-placedInService" />
+          </FieldRow>
+        </fieldset>
         <div className="flex flex-wrap gap-3">
           <Button type="submit" busy={action.busy === 'save'} busyLabel="Saving…">
             Save details

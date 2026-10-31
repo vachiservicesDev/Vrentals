@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CATEGORIES, type TransactionType } from './money';
 
 const day = z
   .string()
@@ -17,6 +18,10 @@ export const propertySchema = z.object({
   hoaName: optional(150),
   hoaContact: optional(500),
   notes: optional(5000),
+  // For the depreciation estimate. An empty string clears them.
+  purchasePrice: z.union([z.literal(''), money]).optional(),
+  landValue: z.union([z.literal(''), money]).optional(),
+  placedInService: z.union([z.literal(''), day]).optional(),
 });
 
 export const leaseSchema = z
@@ -77,7 +82,30 @@ export const reminderSchema = z.object({
   notes: optional(5000),
 });
 
+export const transactionSchema = z
+  .object({
+    type: z.enum(['expense', 'income', 'capital', 'deposit'], { errorMap: () => ({ message: 'Choose what kind of entry this is.' }) }),
+    category: z.string().trim().min(1, 'Choose a category.'),
+    date: day,
+    amount: money.refine((v) => v > 0, 'Enter the amount.'),
+    payee: optional(150),
+    paidFrom: z.enum(['business', 'personal']).default('business'),
+    description: optional(2000),
+  })
+  .refine((v) => CATEGORIES[v.type as TransactionType].some((c) => c.value === v.category), { message: 'Choose a category from the list.', path: ['category'] });
+
 /** Turns a parsed number back into the string Drizzle's decimal columns expect. */
 export function dec(value: number | undefined | null): string | null {
   return value === undefined || value === null ? null : value.toFixed(2);
+}
+
+/** A parsed home, ready for the properties table: empty values become null, money becomes strings. */
+export function propertyValues(data: Partial<z.infer<typeof propertySchema>>) {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v === undefined) continue;
+    if (v === '') out[k] = null;
+    else out[k] = k === 'purchasePrice' || k === 'landValue' ? dec(v as number) : v;
+  }
+  return out;
 }

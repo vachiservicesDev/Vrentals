@@ -5,13 +5,14 @@ import { REPAIR_URGENCIES, statusOf } from '@/lib/status';
 import { Button } from '@/components/ui/Button';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
-import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, When, formatMoney } from '@/components/ui/ui';
+import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatMoney } from '@/components/ui/ui';
 
 interface Rental {
   home: { name: string; address: string; city: string | null; state: string; zip: string | null };
   lease: { startDate: string; endDate: string | null; monthlyRent: string; dueDay: number; graceDays: number; lateFee: string | null; securityDeposit: string | null };
   landlord: { name: string | null; email: string; phone: string | null } | null;
-  charges: { id: string; period: string; dueDate: string; amount: string; paidAmount: string; paidOn: string | null; status: string }[];
+  charges: { id: string; period: string; dueDate: string; amount: string; paidAmount: string; paidOn: string | null; status: string; processing: string | null }[];
+  onlinePayments: boolean;
   repairs: { id: string; title: string; description: string | null; urgency: string; status: string; appointmentAt: string | null; vendorName: string | null; createdAt: string; completedAt: string | null }[];
 }
 
@@ -22,7 +23,14 @@ const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 =
 export default function TenantRentalPage() {
   const { data, error, loading, reload } = useResource<{ rental: Rental | null }>('/api/me');
   const action = useAction();
+  const pay = useAction();
   const rental = data?.rental;
+  const paymentNote = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('payment');
+
+  async function payOnline(chargeId: string) {
+    const result = await pay.run<{ url: string }>(`pay-${chargeId}`, `/api/charges/${chargeId}/pay`, { body: {} });
+    if (result.ok && result.data) window.location.assign(result.data.url);
+  }
 
   async function report(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -71,10 +79,38 @@ export default function TenantRentalPage() {
                 { header: 'Rent', align: 'right', cell: (c) => formatMoney(c.amount) },
                 { header: 'Paid', align: 'right', cell: (c) => formatMoney(c.paidAmount) },
                 { header: 'Status', cell: (c) => <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip> },
+                {
+                  header: 'Receipt or payment',
+                  align: 'right',
+                  cell: (c) =>
+                    c.processing ? (
+                      <Chip tone="info">{formatMoney(c.processing)} on its way</Chip>
+                    ) : rental.onlinePayments && c.status !== 'paid' ? (
+                      <Button size="sm" onClick={() => payOnline(c.id)} busy={pay.busy === `pay-${c.id}`} busyLabel="Opening…">
+                        Pay {formatMoney(Number(c.amount) - Number(c.paidAmount))} by bank
+                      </Button>
+                    ) : Number(c.paidAmount) > 0 ? (
+                      <TextLink href={`/receipts/${c.id}`}>View receipt</TextLink>
+                    ) : (
+                      '—'
+                    ),
+                },
               ]}
             />
           )}
-          <p className="mt-4 text-sm text-muted">Pay your landlord the usual way. They record each payment here, and you get a notification when they do.</p>
+          {pay.error && <div className="mt-4"><Alert>{pay.error}</Alert></div>}
+          {paymentNote === 'sent' && (
+            <div className="mt-4">
+              <Alert tone="success" title="Payment started">
+                Bank payments take about 4 business days. You&apos;ll get a receipt here once your bank confirms it.
+              </Alert>
+            </div>
+          )}
+          <p className="mt-4 text-sm text-muted">
+            {rental.onlinePayments
+              ? 'Pay by bank here, or pay your landlord the usual way. Your bank details go to Stripe, the payment company, not to Rentals or your landlord.'
+              : 'Pay your landlord the usual way. They record each payment here, and you get a receipt when they do.'}
+          </p>
         </Panel>
 
         <Panel title="Report a repair" description="Tell your landlord what needs fixing. You'll be notified when a visit is scheduled.">
