@@ -61,10 +61,13 @@ export async function openSlots(propertyId: string, now = new Date()) {
 
 /** "2026-11-04" + "17:30" on the home's local clock, as a UTC instant (handles daylight saving). */
 export function localInstant(date: string, time: string, timeZone: string): Date {
-  const guess = new Date(`${date}T${time}:00Z`);
-  const shown = new Date(guess.toLocaleString('en-US', { timeZone }));
-  const asUtc = new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' }));
-  return new Date(guess.getTime() + (asUtc.getTime() - shown.getTime()));
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  // The zone's offset from UTC at an instant, in ms.
+  const offset = (at: number) => Date.parse(new Date(at).toLocaleString('en-US', { timeZone }) + ' UTC') - Date.parse(new Date(at).toLocaleString('en-US', { timeZone: 'UTC' }) + ' UTC');
+  // Guess with the offset at the wall time read as UTC, then correct with the offset at that guess,
+  // so times on the day the clocks change land on the right side of the change.
+  const first = wall - offset(wall);
+  return new Date(wall - offset(first));
 }
 
 export function clientIp(headers: Headers): string | null {

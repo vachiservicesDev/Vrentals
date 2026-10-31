@@ -21,6 +21,7 @@ import { POST as voidAgreement } from '@/app/api/agreements/[id]/void/route';
 import { GET as me } from '@/app/api/me/route';
 import { renderLease, sha256 } from '@/lib/rentals/leaseTemplate';
 import { sameName } from '@/lib/rentals/leasing';
+import { localInstant } from '@/lib/rentals/listings';
 import { resetDb, seedAccount } from './db';
 import { getRequest, jsonRequest } from './http';
 import { setCurrentUser } from './mockAuth';
@@ -122,6 +123,13 @@ describe('listings and showings', () => {
     expect(new Date(slots[0].startsAt).toISOString()).toBe('2027-01-15T16:00:00.000Z');
     setCurrentUser(null);
     expect((await json(await publicListing(getRequest(), params(listing.id)))).listing).toMatchObject({ stateName: 'Texas', timeZone: 'America/Chicago' });
+  });
+
+  it('turns a local showing time into the right instant, even on the days the clocks change', () => {
+    expect(localInstant('2027-03-14', '03:30', 'America/Chicago').toISOString()).toBe('2027-03-14T08:30:00.000Z');
+    expect(localInstant('2027-03-13', '10:00', 'America/Chicago').toISOString()).toBe('2027-03-13T16:00:00.000Z');
+    expect(localInstant('2026-11-01', '10:00', 'America/New_York').toISOString()).toBe('2026-11-01T15:00:00.000Z');
+    expect(localInstant('2026-07-04', '17:30', 'America/Los_Angeles').toISOString()).toBe('2026-07-05T00:30:00.000Z');
   });
 
   it('quietly drops bot submissions caught by the hidden field', async () => {
