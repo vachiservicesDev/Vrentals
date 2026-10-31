@@ -7,15 +7,15 @@ import { signOutAction } from '../actions';
 
 export const metadata: Metadata = { title: 'No account' };
 
-/** A login that exists in Supabase but has no Rentals account (for example from another app). */
+/** A login that exists in Supabase but has no Vrentals account (for example from another app). */
 export default async function NoAccessPage() {
   const session = await loadSession();
   return (
     <AuthCard
-      title="No Rentals account"
+      title="No Vrentals account"
       lead={
         <>
-          {session ? <>You&apos;re signed in as <span className="font-medium text-ink">{session.email}</span>, but</> : 'This login'} doesn&apos;t have a Rentals account yet. Tenants get access when their landlord
+          {session ? <>You&apos;re signed in as <span className="font-medium text-ink">{session.email}</span>, but</> : 'This login'} doesn&apos;t have a Vrentals account yet. Tenants get access when their landlord
           invites them. Landlords can create an account.
         </>
       }

@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 
 /**
- * Rentals' own invite and password-reset emails, sent through the SMTP account in env (a Gmail
+ * Vrentals' own invite and password-reset emails, sent through the SMTP account in env (a Gmail
  * account with an App Password works) instead of Supabase's mailer. Links point straight at this
  * app's /auth/confirm with a token hash, so they never depend on Supabase's Site URL setting.
  */
@@ -34,7 +34,7 @@ function layout(heading: string, paragraphs: string[], button: { label: string; 
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e8e2d9;border-radius:8px">
 <tr><td style="padding:24px 32px;border-bottom:3px solid ${BRAND}">
-<span style="font-size:20px;font-weight:bold;color:${BRAND}">Rentals</span>
+<span style="font-size:20px;font-weight:bold;color:${BRAND}">Vrentals</span>
 </td></tr>
 <tr><td style="padding:32px">
 <h1 style="margin:0 0 20px;font-size:24px;line-height:32px;color:${INK}">${heading}</h1>
@@ -46,7 +46,7 @@ ${body}
 <p style="margin:0;font-size:13px;line-height:20px;color:${MUTED};word-break:break-all">If the button doesn't work, paste this into your browser:<br><a href="${escape(button.url)}" style="color:${BRAND}">${escape(button.url)}</a></p>
 </td></tr>
 <tr><td style="padding:20px 32px;border-top:1px solid #e8e2d9;font-size:12px;line-height:18px;color:${MUTED}">
-Sent by Rentals. If you weren&#39;t expecting this email, you can ignore it.
+Sent by Vrentals. If you weren&#39;t expecting this email, you can ignore it.
 </td></tr>
 </table>
 </td></tr></table>
@@ -55,16 +55,16 @@ Sent by Rentals. If you weren&#39;t expecting this email, you can ignore it.
 
 export function resetEmail(firstName: string, url: string) {
   const name = firstName.trim().split(/\s+/)[0] || 'there';
-  const subject = 'Reset your Rentals password';
+  const subject = 'Reset your Vrentals password';
   const html = layout(
     `Hi ${escape(name)},`,
-    ['We got a request to reset the password for your Rentals account. Use the button below to choose a new one.'],
+    ['We got a request to reset the password for your Vrentals account. Use the button below to choose a new one.'],
     { label: 'Choose a new password', url },
     "This link works once and expires in an hour. If you didn't ask for a reset, you can ignore this email and your password stays the same.",
   );
   const text = `Hi ${name},
 
-We got a request to reset the password for your Rentals account. Choose a new one here:
+We got a request to reset the password for your Vrentals account. Choose a new one here:
 ${url}
 
 This link works once and expires in an hour. If you didn't ask for a reset, you can ignore this email and your password stays the same.`;
@@ -73,8 +73,8 @@ This link works once and expires in an hour. If you didn't ask for a reset, you 
 
 export function tenantWelcomeEmail(name: string, homeName: string, url: string) {
   const first = name.trim().split(/\s+/)[0] || 'there';
-  const subject = `Your Rentals account for ${homeName}`;
-  const intro = `Your landlord uses Rentals for ${homeName}. You can see your rent and payment history, report anything that needs fixing and pick a time for the repair, and message your landlord, all in one place.`;
+  const subject = `Your Vrentals account for ${homeName}`;
+  const intro = `Your landlord uses Vrentals for ${homeName}. You can see your rent and payment history, report anything that needs fixing and pick a time for the repair, and message your landlord, all in one place.`;
   const html = layout(
     `Hi ${escape(first)},`,
     [escape(intro), 'To get started, choose a password for your account. It takes less than a minute.'],
@@ -95,7 +95,7 @@ For your security, this link works once and expires in 24 hours. If it has expir
 /** A rent receipt or reminder: the same words as the text message, with a button to the account. */
 export function rentEmail(subject: string, heading: string, message: string, url: string, button: string) {
   const paragraphs = message.split('\n').filter(Boolean).map(escape);
-  const html = layout(heading, paragraphs, { label: button, url }, 'You get this because your landlord manages your rental in Rentals.');
+  const html = layout(heading, paragraphs, { label: button, url }, 'You get this because your landlord manages your rental in Vrentals.');
   return { subject, html, text: `${message}\n\n${url}` };
 }
 
@@ -111,13 +111,13 @@ export async function sendMail(to: string, mail: { subject: string; html: string
     secure: port === 465,
     auth: { user, pass },
   });
-  await transporter.sendMail({ from: `"Rentals" <${user}>`, to, ...mail });
+  await transporter.sendMail({ from: `"Vrentals" <${user}>`, to, ...mail });
 }
 
 export function coLandlordEmail(name: string, ownerName: string, url: string) {
   const first = name.trim().split(/\s+/)[0] || 'there';
   const subject = `${ownerName} added you to their rentals`;
-  const intro = `${ownerName} added you as a co-landlord in Rentals. You can see and manage their homes: rent, repairs, bills, documents and the profit and loss report.`;
+  const intro = `${ownerName} added you as a co-landlord in Vrentals. You can see and manage their homes: rent, repairs, bills, documents and the profit and loss report.`;
   const html = layout(
     `Hi ${escape(first)},`,
     [escape(intro), 'To get started, choose a password for your account.'],

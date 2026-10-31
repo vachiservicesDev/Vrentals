@@ -8,7 +8,7 @@ import { accountFor } from './guards';
 
 export type AppSession = NonNullable<Awaited<ReturnType<typeof loadSession>>>;
 
-/** The signed-in user, their Rentals account (when they have one) and unread notifications. Cached per request. */
+/** The signed-in user, their Vrentals account (when they have one) and unread notifications. Cached per request. */
 export const loadSession = cache(async () => {
   const supabase = await createClient();
   const {

@@ -6,7 +6,7 @@ import { LAPSED_MESSAGE, planLapsed, trialPlan } from '@/lib/rentals/plans';
 import { createClient } from '@/lib/supabase/server';
 
 /**
- * The Rentals account for a Supabase login. A landlord who signed up here gets theirs created on
+ * The Vrentals account for a Supabase login. A landlord who signed up here gets theirs created on
  * first use (the sign-up form tags the login with signup_role "landlord"); tenants get theirs when
  * their landlord invites them. Any other login in the same Supabase project (for example someone
  * from another app) has no account and no access.
@@ -30,7 +30,7 @@ async function current() {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, status: 401, message: 'Not signed in' };
   const account = await accountFor(user);
-  if (!account || !account.isActive) return { ok: false as const, status: 403, message: 'No Rentals account for this login' };
+  if (!account || !account.isActive) return { ok: false as const, status: 403, message: 'No Vrentals account for this login' };
   return { ok: true as const, user, account };
 }
 
@@ -55,7 +55,7 @@ export async function requireLandlord(mode: 'read' | 'write' = 'read') {
   if (gate.account.role !== 'landlord') return { ok: false as const, status: 403, message: 'Landlord access required' };
   const ownerId = ownerIdOf(gate.account);
   const owner = ownerId === gate.account.id ? gate.account : (await db.select().from(accounts).where(eq(accounts.id, ownerId)).limit(1))[0];
-  if (!owner?.isActive) return { ok: false as const, status: 403, message: 'This Rentals account is suspended.' };
+  if (!owner?.isActive) return { ok: false as const, status: 403, message: 'This Vrentals account is suspended.' };
   if (mode === 'write' && planLapsed(owner)) return { ok: false as const, status: 403, message: LAPSED_MESSAGE };
   return { ...gate, ownerId, owner };
 }

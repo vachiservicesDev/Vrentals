@@ -40,7 +40,7 @@ export function TeamPanel() {
   }
 
   async function remove(id: string, who: string) {
-    if (!window.confirm(`Remove ${who}? They'll no longer see your homes in Rentals.`)) return;
+    if (!window.confirm(`Remove ${who}? They'll no longer see your homes in Vrentals.`)) return;
     setRowError(null);
     const result = await api(`/api/team/${id}`, { method: 'DELETE' });
     if (!result.ok) setRowError(result.message);

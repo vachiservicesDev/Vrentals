@@ -64,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
       <footer className="border-t border-line bg-white">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-4 py-5 text-sm text-muted sm:flex-row sm:justify-between md:px-8">
-          <p>Rentals</p>
+          <p>Vrentals</p>
           <p>{landlord ? 'Your homes, rent, repairs and bills in one place.' : 'Questions about your home? Contact your landlord.'}</p>
         </div>
       </footer>

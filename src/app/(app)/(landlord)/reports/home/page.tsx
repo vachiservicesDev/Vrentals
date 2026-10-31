@@ -189,7 +189,7 @@ function Body({ report: r }: { report: HomeReport }) {
           />
         )}
       </Panel>
-      <p className="text-sm text-muted">Prepared with Rentals from what you recorded, using IRS limits for {r.year} where they&apos;re known. Credits and limits are estimates. Not tax advice: your preparer&apos;s numbers are the ones to file.</p>
+      <p className="text-sm text-muted">Prepared with Vrentals from what you recorded, using IRS limits for {r.year} where they&apos;re known. Credits and limits are estimates. Not tax advice: your preparer&apos;s numbers are the ones to file.</p>
     </div>
   );
 }

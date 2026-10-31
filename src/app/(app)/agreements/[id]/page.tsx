@@ -97,7 +97,7 @@ export default function AgreementPage() {
             </div>
           </form>
         )}
-        {as === 'landlord' && a.status === 'sent' && <p className="no-print text-ink-2">{lease.tenantName} can sign from their Rentals account. If they don&apos;t have a login yet, invite them from the home page.</p>}
+        {as === 'landlord' && a.status === 'sent' && <p className="no-print text-ink-2">{lease.tenantName} can sign from their Vrentals account. If they don&apos;t have a login yet, invite them from the home page.</p>}
 
         <div className="no-print flex flex-wrap gap-3">
           <Button variant="secondary" onClick={() => window.print()}>

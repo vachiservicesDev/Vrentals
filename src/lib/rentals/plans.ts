@@ -30,4 +30,4 @@ export function planLabel(plan: Plan): string {
   return plan.planExpires ? `${homes}, through ${plan.planExpires}` : homes;
 }
 
-export const LAPSED_MESSAGE = 'Your Rentals plan has ended, so your homes are read-only. Contact Vachi Services to renew it.';
+export const LAPSED_MESSAGE = 'Your Vrentals plan has ended, so your homes are read-only. Contact Vachi Services to renew it.';

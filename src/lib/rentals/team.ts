@@ -22,7 +22,7 @@ export async function coLandlords(ownerId: string) {
 /**
  * Adds a co-landlord: someone who manages all of `owner`'s homes with the same access. They get a
  * login like a tenant does (an emailed invite, or a link the owner texts). An address that already
- * has a Rentals account can't be added: a tenant, another landlord, or someone else's co-landlord
+ * has a Vrentals account can't be added: a tenant, another landlord, or someone else's co-landlord
  * would otherwise mix two people's homes in one account.
  */
 export async function addCoLandlord(owner: Account, input: { email: string; fullName: string }, mode: 'email' | 'link', appUrl: string): Promise<CoLandlordResult> {
@@ -41,7 +41,7 @@ export async function addCoLandlord(owner: Account, input: { email: string; full
     const [{ n }] = await db.select({ n: count() }).from(properties).where(eq(properties.ownerId, current.id));
     // Only an empty landlord account (signed up, never added a home) can join someone else's.
     if (current.role !== 'landlord' || current.actsFor || Number(n) > 0) {
-      return { ok: false, status: 409, message: `${email} already uses Rentals with its own homes or lease, so it can't be added. Ask them for a different email.` };
+      return { ok: false, status: 409, message: `${email} already uses Vrentals with its own homes or lease, so it can't be added. Ask them for a different email.` };
     }
   }
 
@@ -63,7 +63,7 @@ export async function addCoLandlord(owner: Account, input: { email: string; full
   return signIn.existing ? { ok: true, outcome: 'existing', account } : { ok: true, outcome: 'link', link: signIn.link, account };
 }
 
-/** Ends a co-landlord's access. Their login stays (it may be used by other apps); their Rentals account goes. */
+/** Ends a co-landlord's access. Their login stays (it may be used by other apps); their Vrentals account goes. */
 export async function removeCoLandlord(ownerId: string, id: string): Promise<boolean> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return false;
   const removed = await db.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.actsFor, ownerId))).returning({ id: accounts.id });

@@ -257,7 +257,7 @@ function Statement({ report: r, allHomes }: { report: ReportData; allHomes: bool
           ]}
         />
       </Panel>
-      <p className="text-sm text-muted">Prepared with Rentals. Figures are what was recorded in the app; depreciation is an estimate. Not tax advice.</p>
+      <p className="text-sm text-muted">Prepared with Vrentals. Figures are what was recorded in the app; depreciation is an estimate. Not tax advice.</p>
     </div>
   );
 }

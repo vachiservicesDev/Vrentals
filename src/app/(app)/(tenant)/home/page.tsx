@@ -114,7 +114,7 @@ export default function TenantRentalPage() {
           )}
           <p className="mt-4 text-sm text-muted">
             {rental.onlinePayments
-              ? 'Pay by bank here, or pay your landlord the usual way. Your bank details go to Stripe, the payment company, not to Rentals or your landlord.'
+              ? 'Pay by bank here, or pay your landlord the usual way. Your bank details go to Stripe, the payment company, not to Vrentals or your landlord.'
               : 'Pay your landlord the usual way. They record each payment here, and you get a receipt when they do.'}
           </p>
         </Panel>

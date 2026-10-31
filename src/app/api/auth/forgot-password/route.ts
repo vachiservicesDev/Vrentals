@@ -15,7 +15,7 @@ const WINDOW_MS = 60_000;
 
 /**
  * "Forgot your password?" Sends the reset email from the app's own SMTP account, only to
- * addresses with a Rentals account. Answers the same either way, so it can't be used to find out
+ * addresses with a Vrentals account. Answers the same either way, so it can't be used to find out
  * who has one.
  */
 export async function POST(request: NextRequest) {

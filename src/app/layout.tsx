@@ -6,9 +6,9 @@ const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-fraunces', dis
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: { default: 'Rentals', template: '%s · Rentals' },
+  title: { default: 'Vrentals', template: '%s · Vrentals' },
   description: 'Run your rental homes in one place: rent, repairs, insurance and HOA, with a portal for your tenants.',
-  applicationName: 'Rentals',
+  applicationName: 'Vrentals',
   robots: { index: false, follow: false },
 };
 

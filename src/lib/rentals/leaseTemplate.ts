@@ -54,7 +54,7 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     ],
     [
       'Rent',
-      `Rent is ${money(f.monthlyRent)} per month, due in advance on the ${ordinal(f.dueDay)} day of each month. ${t.rentPaymentMethod ? `Tenant will pay rent by ${t.rentPaymentMethod}.` : 'Tenant will pay rent by a method Landlord accepts, including through the Rentals app where offered.'} Landlord will give a receipt for each payment. Rent for a partial first or last month is prorated by day.`,
+      `Rent is ${money(f.monthlyRent)} per month, due in advance on the ${ordinal(f.dueDay)} day of each month. ${t.rentPaymentMethod ? `Tenant will pay rent by ${t.rentPaymentMethod}.` : 'Tenant will pay rent by a method Landlord accepts, including through the Vrentals app where offered.'} Landlord will give a receipt for each payment. Rent for a partial first or last month is prorated by day.`,
     ],
     [
       'Late Charge',
@@ -82,7 +82,7 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
     ],
     [
       "Tenant's Duties",
-      "Tenant will keep the Premises clean and safe; dispose of trash properly; use all systems and appliances reasonably; not damage the Premises or allow others to; not disturb neighbors' peaceful enjoyment; test smoke and carbon monoxide detectors and replace their batteries; and report needed repairs promptly, including through the Rentals app. Tenant pays for damage caused by Tenant, household members or guests beyond normal wear and tear.",
+      "Tenant will keep the Premises clean and safe; dispose of trash properly; use all systems and appliances reasonably; not damage the Premises or allow others to; not disturb neighbors' peaceful enjoyment; test smoke and carbon monoxide detectors and replace their batteries; and report needed repairs promptly, including through the Vrentals app. Tenant pays for damage caused by Tenant, household members or guests beyond normal wear and tear.",
     ],
     [
       'Entry by Landlord',
@@ -114,7 +114,7 @@ export function renderLease(f: LeaseFacts, t: AgreementTerms): string {
       : []),
     [
       'Notices',
-      `Notices to Landlord go to ${t.landlordAddress}. Notices to Tenant go to the Premises or ${f.tenantEmail}. Notices may also be sent through the Rentals app where the law allows.`,
+      `Notices to Landlord go to ${t.landlordAddress}. Notices to Tenant go to the Premises or ${f.tenantEmail}. Notices may also be sent through the Vrentals app where the law allows.`,
     ],
     [
       'Ending the Lease',
