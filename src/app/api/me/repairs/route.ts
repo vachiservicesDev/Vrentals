@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { repairRequests } from '@/db/schema';
 import { requireAccount } from '@/lib/auth/guards';
-import { notify } from '@/lib/notify';
+import { notifyLandlords } from '@/lib/notify';
 import { tenantLease } from '@/lib/rentals/access';
 import { repairCreateSchema } from '@/lib/rentals/schemas';
 
@@ -22,8 +22,7 @@ export async function POST(request: NextRequest) {
     .values({ ...body.data, propertyId: found.property.id, reportedBy: gate.account.id })
     .returning({ id: repairRequests.id, title: repairRequests.title, urgency: repairRequests.urgency, status: repairRequests.status, createdAt: repairRequests.createdAt });
 
-  await notify({
-    accountId: found.property.ownerId,
+  await notifyLandlords(found.property.ownerId, {
     title: repair.urgency === 'urgent' ? 'Urgent repair reported' : 'Repair reported',
     message: `${found.lease.tenantName} at ${found.property.name}: "${repair.title}".`,
     urgent: repair.urgency === 'urgent',

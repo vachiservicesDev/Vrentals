@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { Logo } from '@/components/ui/Logo';
 import { buttonClass } from '@/components/ui/Button';
 import { TopNav } from '@/components/shell/TopNav';
+import { Alert } from '@/components/ui/ui';
+import { LAPSED_MESSAGE, planLapsed } from '@/lib/rentals/plans';
 import { homeFor, requireSession } from '@/lib/auth/session';
 import { signOutAction } from '../actions';
 
@@ -18,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/reports', label: 'Money & taxes' },
         { href: '/notifications', label: 'Notifications', badge: session.unread },
         { href: '/account', label: 'Account' },
+        ...(session.platformAdmin ? [{ href: '/platform', label: 'Landlord plans' }] : []),
       ]
     : [
         { href: '/home', label: 'My home' },
@@ -50,6 +53,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 focus:outline-none md:px-8 md:py-10">
+        {landlord && !session.account.actsFor && planLapsed(session.account) && (
+          <div className="mb-6">
+            <Alert tone="info" title="Your plan has ended">
+              {LAPSED_MESSAGE}
+            </Alert>
+          </div>
+        )}
         {children}
       </main>
       <footer className="border-t border-line bg-white">

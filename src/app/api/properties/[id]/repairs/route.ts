@@ -7,10 +7,10 @@ import { repairCreateSchema } from '@/lib/rentals/schemas';
 
 /** The landlord logs a repair themselves (tenants report theirs from /rental). */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const property = await ownedProperty(gate.account.id, params.id);
+  const property = await ownedProperty(gate.ownerId, params.id);
   if (!property) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   const body = repairCreateSchema.safeParse(await request.json());

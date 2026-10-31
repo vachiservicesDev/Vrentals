@@ -18,3 +18,10 @@ export function daysUntil(isoDay: string): number {
   const b = Date.parse(`${isoDay.slice(0, 10)}T00:00:00Z`);
   return Math.round((b - a) / 86_400_000);
 }
+
+/** An ISO day moved by whole days (negative goes back). */
+export function addDays(isoDay: string, days: number): string {
+  const d = new Date(`${isoDay.slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}

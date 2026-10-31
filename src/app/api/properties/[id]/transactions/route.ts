@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const gate = await requireLandlord();
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const property = await ownedProperty(gate.account.id, params.id);
+  const property = await ownedProperty(gate.ownerId, params.id);
   if (!property) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   const from = request.nextUrl.searchParams.get('from');
@@ -28,10 +28,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 /** Adds an expense, an income entry or a deposit to a home. */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const property = await ownedProperty(gate.account.id, params.id);
+  const property = await ownedProperty(gate.ownerId, params.id);
   if (!property) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   const body = transactionSchema.safeParse(await request.json().catch(() => null));

@@ -92,6 +92,13 @@ For your security, this link works once and expires in 24 hours. If it has expir
   return { subject, html, text };
 }
 
+/** A rent receipt or reminder: the same words as the text message, with a button to the account. */
+export function rentEmail(subject: string, heading: string, message: string, url: string, button: string) {
+  const paragraphs = message.split('\n').filter(Boolean).map(escape);
+  const html = layout(heading, paragraphs, { label: button, url }, 'You get this because your landlord manages your rental in Rentals.');
+  return { subject, html, text: `${message}\n\n${url}` };
+}
+
 /** Sends one email from the app's SMTP account. Throws when SMTP is missing or the send fails. */
 export async function sendMail(to: string, mail: { subject: string; html: string; text: string }): Promise<void> {
   const user = process.env.SMTP_USER;
@@ -105,4 +112,17 @@ export async function sendMail(to: string, mail: { subject: string; html: string
     auth: { user, pass },
   });
   await transporter.sendMail({ from: `"Rentals" <${user}>`, to, ...mail });
+}
+
+export function coLandlordEmail(name: string, ownerName: string, url: string) {
+  const first = name.trim().split(/\s+/)[0] || 'there';
+  const subject = `${ownerName} added you to their rentals`;
+  const intro = `${ownerName} added you as a co-landlord in Rentals. You can see and manage their homes: rent, repairs, bills, documents and the profit and loss report.`;
+  const html = layout(
+    `Hi ${escape(first)},`,
+    [escape(intro), 'To get started, choose a password for your account.'],
+    { label: 'Set up my account', url },
+    'For your security, this link works once and expires in 24 hours.',
+  );
+  return { subject, html, text: `Hi ${first},\n\n${intro}\n\nChoose a password here:\n${url}` };
 }

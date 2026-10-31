@@ -10,10 +10,10 @@ const FROM_REPAIR = 'This cost comes from a repair. Change it on the repair, und
 
 /** Edits a ledger entry. The form sends every field, so this replaces them all. */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const before = await ownedTransaction(gate.account.id, params.id);
+  const before = await ownedTransaction(gate.ownerId, params.id);
   if (!before) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   if (before.sourceType === 'repair') return NextResponse.json({ message: FROM_REPAIR }, { status: 409 });
 
@@ -30,10 +30,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const before = await ownedTransaction(gate.account.id, params.id);
+  const before = await ownedTransaction(gate.ownerId, params.id);
   if (!before) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   if (before.sourceType === 'repair') return NextResponse.json({ message: FROM_REPAIR }, { status: 409 });
 

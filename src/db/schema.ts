@@ -1,4 +1,4 @@
-import { boolean, date, decimal, integer, pgSchema, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, bigint, boolean, date, decimal, integer, pgSchema, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
 
 /**
  * Everything lives in its own Postgres schema, `rentals`, so it never mixes with other apps'
@@ -20,9 +20,28 @@ export const accounts = rentals.table('accounts', {
   role: roleEnum('role').notNull(),
   fullName: varchar('full_name', { length: 200 }),
   phone: varchar('phone', { length: 30 }),
+  // A co-landlord (a spouse or partner) manages the homes of the landlord named here, with the same
+  // access. Empty for everyone else. Removing the owner removes their co-landlords' access too.
+  actsFor: uuid('acts_for').references((): AnyPgColumn => accounts.id, { onDelete: 'cascade' }),
   isActive: boolean('is_active').notNull().default(true),
+  // The owner's own Stripe account, where tenants' online rent goes. Only Stripe's ids are kept:
+  // bank details stay with Stripe and never reach this app.
+  stripeAccountId: varchar('stripe_account_id', { length: 64 }).unique(),
+  stripeChargesEnabled: boolean('stripe_charges_enabled').notNull().default(false),
+  // A landlord's plan, set by Vachi staff on /platform (like VTrack's company licenses). Empty means
+  // no limit. After planExpires the account is read-only until the plan is renewed.
+  homeLimit: integer('home_limit'),
+  planExpires: date('plan_expires'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Vachi staff who manage landlords' plans on /platform. Added by hand in SQL, never through the app. */
+export const platformAdmins = rentals.table('platform_admins', {
+  accountId: uuid('account_id')
+    .primaryKey()
+    .references(() => accounts.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const properties = rentals.table('properties', {
@@ -83,6 +102,9 @@ export const rentCharges = rentals.table(
     paidOn: date('paid_on'),
     paymentMethod: varchar('payment_method', { length: 30 }),
     note: text('note'),
+    // When the automatic rent reminder and late notice went out, so each is sent once.
+    reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
+    lateNoticeSentAt: timestamp('late_notice_sent_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -159,6 +181,48 @@ export const transactions = rentals.table(
   },
   (t) => ({ source: unique('transactions_source_key').on(t.sourceType, t.sourceId, t.sourceRef) }),
 );
+
+/**
+ * A tenant's online rent payment (a bank debit through Stripe). A bank payment takes a few business
+ * days: it stays 'processing' until Stripe confirms it, and only then counts toward the month.
+ */
+export const rentPayments = rentals.table('rent_payments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  chargeId: uuid('charge_id')
+    .notNull()
+    .references(() => rentCharges.id, { onDelete: 'cascade' }),
+  payerId: uuid('payer_id').references(() => accounts.id, { onDelete: 'set null' }),
+  amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
+  status: varchar('status', { length: 12 }).notNull().default('started'), // 'started' | 'processing' | 'succeeded' | 'failed' | 'expired'
+  stripeAccountId: varchar('stripe_account_id', { length: 64 }).notNull(),
+  stripeSessionId: varchar('stripe_session_id', { length: 255 }).unique(),
+  stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
+  failureMessage: text('failure_message'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Private papers for a home: insurance policies, HOA and tax bills, the deed, the signed lease.
+ * Landlord-only; tenants never see these. The file itself lives in the private Supabase Storage
+ * bucket "rentals-documents" under `storagePath`, and is only handed out as a short-lived link.
+ */
+export const documents = rentals.table('documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  propertyId: uuid('property_id')
+    .notNull()
+    .references(() => properties.id, { onDelete: 'cascade' }),
+  uploadedBy: uuid('uploaded_by').references(() => accounts.id, { onDelete: 'set null' }),
+  kind: varchar('kind', { length: 12 }).notNull(), // see DOCUMENT_KINDS in src/lib/rentals/documents.ts
+  name: varchar('name', { length: 200 }).notNull(),
+  fileName: varchar('file_name', { length: 255 }).notNull(),
+  contentType: varchar('content_type', { length: 100 }).notNull(),
+  size: bigint('size', { mode: 'number' }).notNull(),
+  storagePath: text('storage_path').notNull().unique(),
+  expiresOn: date('expires_on'), // a policy's end date, for example
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const notifications = rentals.table('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),

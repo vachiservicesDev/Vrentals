@@ -9,10 +9,10 @@ import { dec, leaseUpdateSchema } from '@/lib/rentals/schemas';
 
 /** Edits a lease, or ends it (which also stops the tenant seeing it). */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const found = await ownedLease(gate.account.id, params.id);
+  const found = await ownedLease(gate.ownerId, params.id);
   if (!found) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   const body = leaseUpdateSchema.safeParse(await request.json());

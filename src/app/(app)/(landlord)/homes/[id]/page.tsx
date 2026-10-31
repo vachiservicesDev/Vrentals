@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, formValues, useAction, useResource } from '@/lib/client/api';
 import { PAYMENT_METHODS, REMINDER_KINDS, REMINDER_REPEATS, REPAIR_STATUSES, REPAIR_URGENCIES, labelFrom, statusOf } from '@/lib/status';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
+import { receiptText, reminderText, smsLink } from '@/lib/rentals/messages';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
 import { MoneyPanel } from '@/components/money/MoneyPanel';
+import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, When, formatMoney } from '@/components/ui/ui';
 
 interface Property {
@@ -50,6 +52,7 @@ interface Charge {
   paymentMethod: string | null;
   note: string | null;
   status: string;
+  processing: string | null;
 }
 interface Repair {
   id: string;
@@ -78,6 +81,7 @@ interface Reminder {
 }
 interface Detail {
   property: Property;
+  landlordName: string | null;
   leases: Lease[];
   charges: Charge[];
   repairs: Repair[];
@@ -117,7 +121,7 @@ export default function RentalHomePage() {
       </>
     );
 
-  const { property, leases, charges, repairs, reminders } = data;
+  const { property, landlordName, leases, charges, repairs, reminders } = data;
   const lease = leases.find((l) => l.status === 'active') ?? null;
   const past = leases.filter((l) => l.status !== 'active');
   const address = [property.address, property.city, `${property.state} ${property.zip ?? ''}`.trim()].filter(Boolean).join(', ');
@@ -127,7 +131,7 @@ export default function RentalHomePage() {
       <PageHeader back={back} eyebrow="Rental home" title={property.name} lead={address} actions={lease ? <Chip tone="live">Occupied</Chip> : <Chip tone="new">Vacant</Chip>} />
       <div className="grid gap-8">
         {lease ? <LeasePanel lease={lease} onChange={reload} /> : <NewLeasePanel propertyId={property.id} onChange={reload} />}
-        {lease && <RentPanel lease={lease} charges={charges.filter((c) => c.leaseId === lease.id)} onChange={reload} />}
+        {lease && <RentPanel lease={lease} home={property.name} landlordName={landlordName} charges={charges.filter((c) => c.leaseId === lease.id)} onChange={reload} />}
         <RepairsPanel propertyId={property.id} repairs={repairs} onChange={reload} />
         <RemindersPanel propertyId={property.id} reminders={reminders} onChange={reload} />
         <MoneyPanel
@@ -135,6 +139,7 @@ export default function RentalHomePage() {
           // Paying a bill or fixing a repair with a cost adds an expense, so refresh with them.
           reloadKey={moneyKey(repairs, reminders)}
         />
+        <DocumentsPanel propertyId={property.id} />
         <HomePanel property={property} onChange={reload} onDeleted={() => router.push('/dashboard')} />
         {past.length > 0 && (
           <section>
@@ -194,6 +199,8 @@ function LeasePanel({ lease, onChange }: { lease: Lease; onChange: () => void })
     if (result.data.link) {
       setLink(result.data.link);
       action.setSuccess('Invite link created. Text or email it to your tenant; it works once and expires in 24 hours.');
+    } else if (result.data.outcome === 'existing') {
+      action.setSuccess(`${lease.tenantEmail} already has a login, so they can sign in with their own password now. If they forgot it, they can use "Forgot password" on the sign-in page.`);
     } else {
       action.setSuccess(`Invite emailed to ${lease.tenantEmail}.`);
     }
@@ -293,7 +300,7 @@ function NewLeasePanel({ propertyId, onChange }: { propertyId: string; onChange:
   );
 }
 
-function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge[]; onChange: () => void }) {
+function RentPanel({ lease, home, landlordName, charges, onChange }: { lease: Lease; home: string; landlordName: string | null; charges: Charge[]; onChange: () => void }) {
   const action = useAction();
   const open = charges.filter((c) => c.status !== 'paid');
   const [chosen, setChosen] = useState<string>('');
@@ -329,7 +336,16 @@ function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge
               { header: 'Rent', align: 'right', cell: (c) => formatMoney(c.amount) },
               { header: 'Paid', align: 'right', cell: (c) => formatMoney(c.paidAmount) },
               { header: 'Paid on', cell: (c) => (c.paidOn ? <><When iso={c.paidOn} />{c.paymentMethod ? ` · ${labelFrom(PAYMENT_METHODS, c.paymentMethod)}` : ''}</> : '—') },
-              { header: 'Status', cell: (c) => <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip> },
+              {
+                header: 'Status',
+                cell: (c) => (
+                  <span className="inline-flex flex-wrap gap-1.5">
+                    <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip>
+                    {c.processing && <Chip tone="info">{formatMoney(c.processing)} bank payment on its way</Chip>}
+                  </span>
+                ),
+              },
+              { header: 'Tenant', align: 'right', cell: (c) => <ChargeActions charge={c} lease={lease} home={home} landlordName={landlordName} /> },
             ]}
           />
         )}
@@ -373,6 +389,37 @@ function RentPanel({ lease, charges, onChange }: { lease: Lease; charges: Charge
         )}
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Receipt and reminder shortcuts for one month. "Text" opens the landlord's own messages app with the
+ * words filled in, so it comes from their number and costs nothing.
+ */
+function ChargeActions({ charge: c, lease, home, landlordName }: { charge: Charge; lease: Lease; home: string; landlordName: string | null }) {
+  const paid = Number(c.paidAmount) > 0;
+  const owed = c.status !== 'paid';
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  const base = { tenantName: lease.tenantName, landlordName, home, period: c.period, amount: c.amount, paidAmount: c.paidAmount };
+  return (
+    <span className="no-print inline-flex flex-wrap justify-end gap-2">
+      {paid && (
+        <a href={`/receipts/${c.id}`} className={buttonClass('secondary', 'sm')}>
+          Receipt
+        </a>
+      )}
+      {paid && lease.tenantPhone && (
+        <a href={smsLink(lease.tenantPhone, receiptText({ ...base, paidOn: c.paidOn, paymentMethod: c.paymentMethod }, lease.tenantId ? `${origin}/receipts/${c.id}` : undefined))} className={buttonClass('ghost', 'sm')}>
+          Text receipt
+        </a>
+      )}
+      {owed && lease.tenantPhone && (
+        <a href={smsLink(lease.tenantPhone, reminderText({ ...base, dueDate: c.dueDate, late: c.status === 'late' }))} className={buttonClass('ghost', 'sm')}>
+          Text reminder
+        </a>
+      )}
+      {!paid && !(owed && lease.tenantPhone) && <span className="text-sm text-muted">—</span>}
+    </span>
   );
 }
 

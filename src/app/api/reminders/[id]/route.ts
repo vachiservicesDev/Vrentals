@@ -7,10 +7,10 @@ import { ownedReminder } from '@/lib/rentals/access';
 import { dec, reminderSchema } from '@/lib/rentals/schemas';
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const before = await ownedReminder(gate.account.id, params.id);
+  const before = await ownedReminder(gate.ownerId, params.id);
   if (!before) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   const body = reminderSchema.partial().safeParse(await request.json());
@@ -26,10 +26,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const before = await ownedReminder(gate.account.id, params.id);
+  const before = await ownedReminder(gate.ownerId, params.id);
   if (!before) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
   await db.delete(reminders).where(eq(reminders.id, before.id));

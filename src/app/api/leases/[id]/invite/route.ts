@@ -8,10 +8,10 @@ const inviteSchema = z.object({ mode: z.enum(['email', 'link']).default('link') 
 
 /** Gives the tenant on a lease a portal login: an emailed invite, or a link the landlord texts them. */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const found = await ownedLease(gate.account.id, params.id);
+  const found = await ownedLease(gate.ownerId, params.id);
   if (!found) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   if (found.lease.status !== 'active') return NextResponse.json({ message: 'This lease has ended.' }, { status: 409 });
 

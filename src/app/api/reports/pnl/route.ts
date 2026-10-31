@@ -22,9 +22,9 @@ export async function GET(request: NextRequest) {
   if (from > to) return NextResponse.json({ message: 'The start date must be before the end date.' }, { status: 400 });
 
   const propertyId = q.get('property') || undefined;
-  if (propertyId && !(await ownedProperty(gate.account.id, propertyId))) return NextResponse.json({ message: 'Not found' }, { status: 404 });
+  if (propertyId && !(await ownedProperty(gate.ownerId, propertyId))) return NextResponse.json({ message: 'Not found' }, { status: 404 });
 
-  const report = await buildReport(gate.account.id, from, to, propertyId);
+  const report = await buildReport(gate.ownerId, from, to, propertyId);
   if (q.get('format') !== 'csv') return NextResponse.json(report);
 
   const scope = propertyId ? report.homes[0]?.name ?? 'home' : 'all-homes';

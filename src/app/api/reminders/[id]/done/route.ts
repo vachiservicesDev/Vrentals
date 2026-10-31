@@ -14,10 +14,10 @@ import { nextReminderDate } from '@/lib/rentals/rent';
  * today from the business account; the landlord can change that entry under Money.
  */
 export async function POST(_request: Request, { params }: { params: { id: string } }) {
-  const gate = await requireLandlord();
+  const gate = await requireLandlord('write');
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
-  const before = await ownedReminder(gate.account.id, params.id);
+  const before = await ownedReminder(gate.ownerId, params.id);
   if (!before) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   if (before.doneAt) return NextResponse.json({ message: 'This reminder is already done.' }, { status: 409 });
 
