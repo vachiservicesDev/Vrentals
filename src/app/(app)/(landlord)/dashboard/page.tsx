@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { formValues, useAction, useResource } from '@/lib/client/api';
 import { REMINDER_KINDS, labelFrom, statusOf } from '@/lib/status';
+import { STATE_OPTIONS } from '@/lib/rentals/states';
 import { Button } from '@/components/ui/Button';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { PROPERTY_USES } from '@/lib/rentals/homeowner';
@@ -226,7 +227,7 @@ export default function DashboardPage() {
             </FieldRow>
             <FieldRow cols={3}>
               <TextField name="city" label="City" defaultValue="Danbury" errors={action.fieldErrors} />
-              <TextField name="state" label="State" defaultValue="CT" maxLength={2} errors={action.fieldErrors} />
+              <SelectField name="state" label="State" options={STATE_OPTIONS} defaultValue="CT" errors={action.fieldErrors} />
               <TextField name="zip" label="ZIP code" inputMode="numeric" errors={action.fieldErrors} />
             </FieldRow>
             <FieldRow>

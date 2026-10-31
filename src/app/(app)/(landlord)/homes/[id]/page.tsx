@@ -13,6 +13,7 @@ import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { ApplicationsPanel, type Application } from '@/components/leasing/ApplicationsPanel';
 import { ListingPanel } from '@/components/leasing/ListingPanel';
 import { PROPERTY_USES } from '@/lib/rentals/homeowner';
+import { STATE_OPTIONS, stateHints, stateName } from '@/lib/rentals/states';
 import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatMoney } from '@/components/ui/ui';
 
 interface Property {
@@ -161,13 +162,13 @@ export default function RentalHomePage() {
       <PageHeader back={back} eyebrow="Rental home" title={property.name} lead={address} actions={lease ? <Chip tone="live">Occupied</Chip> : <Chip tone="new">Vacant</Chip>} />
       <div className="grid gap-8">
         {lease ? (
-          <LeasePanel lease={lease} landlordName={landlordName} onChange={reload} />
+          <LeasePanel lease={lease} state={property.state} landlordName={landlordName} onChange={reload} />
         ) : (
           <div ref={newLease}>
-            <NewLeasePanel key={prefill?.tenantEmail ?? 'blank'} propertyId={property.id} prefill={prefill} onChange={reload} />
+            <NewLeasePanel key={prefill?.tenantEmail ?? 'blank'} propertyId={property.id} state={property.state} prefill={prefill} onChange={reload} />
           </div>
         )}
-        <ListingPanel propertyId={property.id} defaultRent={lease?.monthlyRent ?? past[0]?.monthlyRent ?? null} vacant={!lease} />
+        <ListingPanel propertyId={property.id} state={property.state} defaultRent={lease?.monthlyRent ?? past[0]?.monthlyRent ?? null} vacant={!lease} />
         <ApplicationsPanel
           propertyId={property.id}
           canStartLease={!lease}
@@ -238,7 +239,7 @@ export default function RentalHomePage() {
   );
 }
 
-function LeasePanel({ lease, landlordName, onChange }: { lease: Lease; landlordName: string | null; onChange: () => void }) {
+function LeasePanel({ lease, state, landlordName, onChange }: { lease: Lease; state: string; landlordName: string | null; onChange: () => void }) {
   const action = useAction();
   const [link, setLink] = useState<string | null>(null);
 
@@ -300,7 +301,7 @@ function LeasePanel({ lease, landlordName, onChange }: { lease: Lease; landlordN
             End lease
           </Button>
         </div>
-        <AgreementSection lease={lease} landlordName={landlordName} onChange={onChange} />
+        <AgreementSection lease={lease} state={state} landlordName={landlordName} onChange={onChange} />
       </div>
     </Panel>
   );
@@ -316,7 +317,7 @@ const AGREEMENT_STATUS = {
  * The written lease: filled in from this lease's terms plus a few extras, then signed in the app by
  * the landlord and the tenant. The signed copy stays with the home and this lease's term.
  */
-function AgreementSection({ lease, landlordName, onChange }: { lease: Lease; landlordName: string | null; onChange: () => void }) {
+function AgreementSection({ lease, state, landlordName, onChange }: { lease: Lease; state: string; landlordName: string | null; onChange: () => void }) {
   const action = useAction();
   const terms = useResource<{ agreement: { terms?: Record<string, unknown> } }>(lease.agreement?.status === 'draft' ? `/api/agreements/${lease.agreement.id}` : null);
   const a = lease.agreement;
@@ -345,7 +346,7 @@ function AgreementSection({ lease, landlordName, onChange }: { lease: Lease; lan
           </a>
         </p>
       ) : (
-        <p className="text-ink-2">Prepare a Connecticut lease from the terms above, sign it here, and your tenant signs it from their account. The signed copy is saved with this home.</p>
+        <p className="text-ink-2">Prepare a {stateName(state)} lease from the terms above, sign it here, and your tenant signs it from their account. The signed copy is saved with this home.</p>
       )}
       {(!a || a.status === 'draft') && !(a && terms.loading) && (
         <details className="rounded-lg border border-line" open={!a}>
@@ -394,7 +395,8 @@ function AgreementSection({ lease, landlordName, onChange }: { lease: Lease; lan
   );
 }
 
-function NewLeasePanel({ propertyId, prefill, onChange }: { propertyId: string; prefill: Prefill | null; onChange: () => void }) {
+function NewLeasePanel({ propertyId, state, prefill, onChange }: { propertyId: string; state: string; prefill: Prefill | null; onChange: () => void }) {
+  const hints = stateHints(state);
   const action = useAction();
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
@@ -420,12 +422,12 @@ function NewLeasePanel({ propertyId, prefill, onChange }: { propertyId: string; 
         <FieldRow cols={3}>
           <TextField name="monthlyRent" label="Monthly rent ($)" type="number" inputMode="decimal" min={0} step="0.01" required defaultValue={prefill?.monthlyRent} errors={action.fieldErrors} />
           <TextField name="dueDay" label="Rent due day" type="number" min={1} max={28} defaultValue={1} required hint="Day of the month, 1 to 28." errors={action.fieldErrors} />
-          <TextField name="graceDays" label="Grace period (days)" type="number" min={0} max={31} defaultValue={9} hint="Connecticut doesn't allow a late fee until 9 days after the due date." errors={action.fieldErrors} />
+          <TextField name="graceDays" label="Grace period (days)" type="number" min={0} max={31} defaultValue={hints.graceDays} hint={hints.grace} errors={action.fieldErrors} />
         </FieldRow>
         <FieldRow cols={3}>
           <TextField name="startDate" label="Lease starts" type="date" required defaultValue={prefill?.startDate} errors={action.fieldErrors} />
           <TextField name="endDate" label="Lease ends" type="date" hint="Leave empty for month to month." errors={action.fieldErrors} />
-          <TextField name="securityDeposit" label="Security deposit ($)" type="number" inputMode="decimal" min={0} step="0.01" hint="Connecticut caps this at 2 months' rent (1 month if the tenant is 62 or older)." errors={action.fieldErrors} />
+          <TextField name="securityDeposit" label="Security deposit ($)" type="number" inputMode="decimal" min={0} step="0.01" hint={hints.deposit} errors={action.fieldErrors} />
         </FieldRow>
         <FieldRow cols={3}>
           <TextField name="lateFee" label="Late fee ($)" type="number" inputMode="decimal" min={0} step="0.01" errors={action.fieldErrors} />
@@ -843,7 +845,7 @@ function HomePanel({ property, onChange, onDeleted }: { property: Property; onCh
         </FieldRow>
         <FieldRow cols={3}>
           <TextField name="city" label="City" defaultValue={property.city} errors={action.fieldErrors} id="f-home-city" />
-          <TextField name="state" label="State" defaultValue={property.state} maxLength={2} errors={action.fieldErrors} id="f-home-state" />
+          <SelectField name="state" label="State" options={STATE_OPTIONS} defaultValue={property.state} errors={action.fieldErrors} id="f-home-state" />
           <TextField name="zip" label="ZIP code" defaultValue={property.zip} errors={action.fieldErrors} id="f-home-zip" />
         </FieldRow>
         <FieldRow>

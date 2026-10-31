@@ -21,6 +21,7 @@ import { POST as voidAgreement } from '@/app/api/agreements/[id]/void/route';
 import { GET as me } from '@/app/api/me/route';
 import { renderLease, sha256 } from '@/lib/rentals/leaseTemplate';
 import { sameName } from '@/lib/rentals/leasing';
+import { localInstant } from '@/lib/rentals/listings';
 import { resetDb, seedAccount } from './db';
 import { getRequest, jsonRequest } from './http';
 import { setCurrentUser } from './mockAuth';
@@ -108,6 +109,29 @@ describe('listings and showings', () => {
     expect((await removeSlot(del(), params(slots[1].id))).status).toBe(200);
   });
 
+  it("uses the home's own state for showing times, and refuses a state that doesn't exist", async () => {
+    await resetDb();
+    const owner = await seedAccount({ role: 'landlord', email: 'tx@example.com', fullName: 'Pat Owner' });
+    setCurrentUser(owner.id);
+    expect((await createHome(jsonRequest({ name: 'Bad', address: '1 Main St', state: 'ZZ' }))).status).toBe(400);
+    const home = (await json(await createHome(jsonRequest({ name: 'Unit 3', address: '3 Elm St', city: 'Austin', state: 'tx', zip: '78701' })))).property;
+    expect(home.state).toBe('TX');
+    const listing = (await json(await putListing(put({ active: true, askingRent: '1800' }), params(home.id)))).listing;
+    await addSlots(jsonRequest({ date: '2027-01-15', times: ['10:00'] }), params(home.id));
+    const { slots } = await json(await listSlots(getRequest(), params(home.id)));
+    // 10:00 AM in Austin (Central, winter) is 16:00 UTC.
+    expect(new Date(slots[0].startsAt).toISOString()).toBe('2027-01-15T16:00:00.000Z');
+    setCurrentUser(null);
+    expect((await json(await publicListing(getRequest(), params(listing.id)))).listing).toMatchObject({ stateName: 'Texas', timeZone: 'America/Chicago' });
+  });
+
+  it('turns a local showing time into the right instant, even on the days the clocks change', () => {
+    expect(localInstant('2027-03-14', '03:30', 'America/Chicago').toISOString()).toBe('2027-03-14T08:30:00.000Z');
+    expect(localInstant('2027-03-13', '10:00', 'America/Chicago').toISOString()).toBe('2027-03-13T16:00:00.000Z');
+    expect(localInstant('2026-11-01', '10:00', 'America/New_York').toISOString()).toBe('2026-11-01T15:00:00.000Z');
+    expect(localInstant('2026-07-04', '17:30', 'America/Los_Angeles').toISOString()).toBe('2026-07-05T00:30:00.000Z');
+  });
+
   it('quietly drops bot submissions caught by the hidden field', async () => {
     const { home, listing } = await listed();
     await addSlots(jsonRequest({ date: future(), times: ['10:00'] }), params(home.id));
@@ -172,7 +196,7 @@ describe('written lease', () => {
 
   it('fills in the Connecticut template from the lease', () => {
     const text = renderLease(
-      { tenantName: 'Jamie Lee', tenantEmail: 'j@example.com', homeName: 'Unit 12', homeAddress: '12 Wooster Heights Rd, Danbury, CT 06810', startDate: '2026-12-01', endDate: '2027-11-30', monthlyRent: '2400', dueDay: 1, graceDays: 9, lateFee: '50', securityDeposit: '2400' },
+      { tenantName: 'Jamie Lee', tenantEmail: 'j@example.com', state: 'CT', homeName: 'Unit 12', homeAddress: '12 Wooster Heights Rd, Danbury, CT 06810', startDate: '2026-12-01', endDate: '2027-11-30', monthlyRent: '2400', dueDay: 1, graceDays: 9, lateFee: '50', securityDeposit: '2400' },
       { ...terms, smoking: 'not_allowed', builtBefore1978: true },
     );
     expect(text).toContain('between Ravi Peddyreddy ("Landlord") and Jamie Lee ("Tenant")');
@@ -182,6 +206,16 @@ describe('written lease', () => {
     expect(text).toContain('LEAD-BASED PAINT DISCLOSURE');
     expect(text).toContain('before Tenant signs this Lease Landlord must give Tenant the EPA pamphlet');
     expect(sha256(text)).toMatch(/^[0-9a-f]{64}$/);
+
+    // Outside Connecticut: that state's law, and no Connecticut numbers or citations.
+    const tx = renderLease(
+      { tenantName: 'Jamie Lee', tenantEmail: 'j@example.com', state: 'TX', homeName: 'Unit 3', homeAddress: '3 Elm St, Austin, TX 78701', startDate: '2026-12-01', endDate: null, monthlyRent: '1800', dueDay: 1, graceDays: 3, lateFee: '75', securityDeposit: '1800' },
+      { ...terms, smoking: 'not_allowed', builtBefore1978: false },
+    );
+    expect(tx).toMatch(/^TEXAS RESIDENTIAL LEASE/);
+    expect(tx).toContain('No late charge will be more than, or charged sooner than, Texas law allows.');
+    expect(tx).toContain('Texas law governs this Lease.');
+    expect(tx).not.toMatch(/Connecticut|C\.G\.S|47a/);
     expect(sameName('ravi  PEDDYREDDY', 'Ravi Peddyreddy')).toBe(true);
     expect(sameName('Ravi P', 'Ravi Peddyreddy')).toBe(false);
   });

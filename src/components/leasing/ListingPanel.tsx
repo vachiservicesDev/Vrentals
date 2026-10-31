@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { CheckboxField, FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
 import { Alert, Chip, DataTable, EmptyState, Panel } from '@/components/ui/ui';
+import { stateHints, stateName, stateTimeZone } from '@/lib/rentals/states';
 
 interface Listing {
   id: string;
@@ -27,7 +28,6 @@ interface Slot {
   booking: { name: string; email: string; phone: string | null; note: string | null } | null;
 }
 
-const when = (iso: string) => new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
 const QUICK_TIMES = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '17:30', '18:00', '18:30', '19:00'];
 const label12 = (t: string) => {
   const [h, m] = t.split(':').map(Number);
@@ -36,7 +36,9 @@ const label12 = (t: string) => {
 const num = (v: string | null) => (v === null ? '' : String(Number(v)));
 
 /** Advertise an empty home: a public page with its details, showing times to book, and the application. */
-export function ListingPanel({ propertyId, defaultRent, vacant }: { propertyId: string; defaultRent: string | null; vacant: boolean }) {
+export function ListingPanel({ propertyId, state, defaultRent, vacant }: { propertyId: string; state: string; defaultRent: string | null; vacant: boolean }) {
+  const timeZone = stateTimeZone(state);
+  const when = (iso: string) => new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone });
   const listing = useResource<{ listing: Listing | null }>(`/api/properties/${propertyId}/listing`);
   const slots = useResource<{ slots: Slot[] }>(`/api/properties/${propertyId}/showings`);
   const save = useAction();
@@ -123,7 +125,7 @@ export function ListingPanel({ propertyId, defaultRent, vacant }: { propertyId: 
               <TextField name="headline" label="Headline" defaultValue={l?.headline ?? ''} hint='Like "Sunny 2-bed townhome near WCSU".' errors={save.fieldErrors} id={`f-l-headline-${propertyId}`} />
               <FieldRow cols={3}>
                 <TextField name="askingRent" label="Monthly rent ($)" type="number" min={0} step="0.01" required defaultValue={l ? num(l.askingRent) : num(defaultRent)} errors={save.fieldErrors} id={`f-l-rent-${propertyId}`} />
-                <TextField name="securityDeposit" label="Security deposit ($)" type="number" min={0} step="0.01" defaultValue={num(l?.securityDeposit ?? null)} hint="Connecticut caps it at 2 months' rent (1 month for tenants 62+)." errors={save.fieldErrors} id={`f-l-dep-${propertyId}`} />
+                <TextField name="securityDeposit" label="Security deposit ($)" type="number" min={0} step="0.01" defaultValue={num(l?.securityDeposit ?? null)} hint={stateHints(state).deposit} errors={save.fieldErrors} id={`f-l-dep-${propertyId}`} />
                 <TextField name="availableFrom" label="Available from" type="date" defaultValue={l?.availableFrom ?? ''} errors={save.fieldErrors} id={`f-l-avail-${propertyId}`} />
               </FieldRow>
               <FieldRow cols={3}>
@@ -155,7 +157,7 @@ export function ListingPanel({ propertyId, defaultRent, vacant }: { propertyId: 
                 rows={rows}
                 rowKey={(s) => s.id}
                 columns={[
-                  { header: 'When (CT time)', primary: true, cell: (s) => `${when(s.startsAt)} · ${s.minutes} min` },
+                  { header: `When (${stateName(state)} time)`, primary: true, cell: (s) => `${when(s.startsAt)} · ${s.minutes} min` },
                   {
                     header: 'Booked by',
                     cell: (s) =>

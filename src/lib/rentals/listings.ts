@@ -2,6 +2,7 @@ import { and, asc, eq, gt, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { accounts, listings, properties, showingBookings, showingSlots } from '@/db/schema';
 import { planLapsed } from './plans';
+import { stateName, stateTimeZone } from './states';
 
 /**
  * A listing as the public sees it: only when it's switched on and its landlord's account is in good
@@ -26,6 +27,9 @@ export async function publicListing(id: string) {
     // The street address is shared: people need it to come to a showing.
     address: [p.address, p.city, `${p.state} ${p.zip ?? ''}`.trim()].filter(Boolean).join(', '),
     landlordName: owner.fullName,
+    state: p.state,
+    stateName: stateName(p.state),
+    timeZone: stateTimeZone(p.state),
     headline: l.headline,
     description: l.description,
     askingRent: l.askingRent,
@@ -55,12 +59,15 @@ export async function openSlots(propertyId: string, now = new Date()) {
   return slots.filter((s) => !taken.has(s.id)).map((s) => ({ id: s.id, startsAt: s.startsAt, minutes: s.minutes }));
 }
 
-/** "2026-11-04" + "17:30" in Connecticut time, as a UTC instant (handles daylight saving). */
-export function easternInstant(date: string, time: string): Date {
-  const guess = new Date(`${date}T${time}:00Z`);
-  const shown = new Date(guess.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const asUtc = new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' }));
-  return new Date(guess.getTime() + (asUtc.getTime() - shown.getTime()));
+/** "2026-11-04" + "17:30" on the home's local clock, as a UTC instant (handles daylight saving). */
+export function localInstant(date: string, time: string, timeZone: string): Date {
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  // The zone's offset from UTC at an instant, in ms.
+  const offset = (at: number) => Date.parse(new Date(at).toLocaleString('en-US', { timeZone }) + ' UTC') - Date.parse(new Date(at).toLocaleString('en-US', { timeZone: 'UTC' }) + ' UTC');
+  // Guess with the offset at the wall time read as UTC, then correct with the offset at that guess,
+  // so times on the day the clocks change land on the right side of the change.
+  const first = wall - offset(wall);
+  return new Date(wall - offset(first));
 }
 
 export function clientIp(headers: Headers): string | null {

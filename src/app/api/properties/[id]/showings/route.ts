@@ -5,7 +5,8 @@ import { showingBookings, showingSlots } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
 import { OWN_HOME_NOT_RENTED, ownedProperty } from '@/lib/rentals/access';
 import { slotsSchema } from '@/lib/rentals/leasing';
-import { easternInstant } from '@/lib/rentals/listings';
+import { localInstant } from '@/lib/rentals/listings';
+import { stateTimeZone } from '@/lib/rentals/states';
 
 /** Upcoming showing times (from the start of today) with who booked each. */
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (!body.success) return NextResponse.json({ message: body.error.issues[0]?.message ?? 'Invalid input', errors: body.error.flatten() }, { status: 400 });
   const { date, times, minutes } = body.data;
 
-  const starts = [...new Set(times)].map((t) => easternInstant(date, t)).filter((d) => d.getTime() > Date.now());
+  const starts = [...new Set(times)].map((t) => localInstant(date, t, stateTimeZone(property.state))).filter((d) => d.getTime() > Date.now());
   if (starts.length === 0) return NextResponse.json({ message: 'Pick times that are still ahead.' }, { status: 400 });
   const existing = await db
     .select({ startsAt: showingSlots.startsAt })

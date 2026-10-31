@@ -42,8 +42,8 @@ export default async function ListingPage({ params }: { params: { id: string } }
             </Link>
           </div>
         </Panel>
-        <Panel id="showings" title="Book a showing" description="Pick a time to see the home in person. Times are Connecticut time.">
-          <BookShowing listingId={l.id} slots={slots.map((s) => ({ id: s.id, startsAt: s.startsAt.toISOString(), minutes: s.minutes }))} />
+        <Panel id="showings" title="Book a showing" description={`Pick a time to see the home in person. Times are ${l.stateName} time.`}>
+          <BookShowing listingId={l.id} timeZone={l.timeZone} slots={slots.map((s) => ({ id: s.id, startsAt: s.startsAt.toISOString(), minutes: s.minutes }))} />
         </Panel>
       </div>
     </>

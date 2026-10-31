@@ -5,7 +5,7 @@ import { notifyLandlords } from '@/lib/notify';
 import { bookingSchema } from '@/lib/rentals/leasing';
 import { openSlots, publicListing } from '@/lib/rentals/listings';
 
-const when = (d: Date) => d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
+const when = (d: Date, timeZone: string) => d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone, timeZoneName: 'short' });
 
 /** Books one open showing time. Public. A time can only be booked once, even with two people clicking at once. */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   await notifyLandlords(listing.ownerId, {
     title: `Showing booked: ${listing.homeName}`,
-    message: `${booking.name} booked ${when(slot.startsAt)}.${booking.phone ? ` Phone ${booking.phone}.` : ''} Email ${booking.email}.${booking.note ? ` Note: "${booking.note}"` : ''}`,
+    message: `${booking.name} booked ${when(slot.startsAt, listing.timeZone)}.${booking.phone ? ` Phone ${booking.phone}.` : ''} Email ${booking.email}.${booking.note ? ` Note: "${booking.note}"` : ''}`,
     link: `/homes/${listing.propertyId}#listing`,
   });
   return NextResponse.json({ booking: { startsAt: slot.startsAt, minutes: slot.minutes } }, { status: 201 });
