@@ -81,6 +81,14 @@ describe('homeowner tax summary math', () => {
     expect(buildHomeTaxSummary(ledger, { ...info, officeSqft: null }, 2026).office).toBeNull();
   });
 
+  it('counts property tax only up to the SALT cap', () => {
+    const s = buildHomeTaxSummary([{ type: 'expense', category: 'property_tax', date: '2026-07-01', amount: '50000' }], info, 2026);
+    expect(s.scheduleA).toMatchObject([{ category: 'property_tax', amount: 40_400 }]);
+    expect(s.totalScheduleA).toBe(40_400);
+    expect(s.salt.propertyTax).toBe(50_000);
+    expect(s.notDeductible).toEqual([]);
+  });
+
   it('follows the SALT cap schedule', () => {
     expect(saltCap(2024).cap).toBe(10_000);
     expect(saltCap(2025)).toEqual({ cap: 40_000, separate: 20_000, phaseOutAbove: 500_000 });
@@ -156,6 +164,13 @@ describe('Homes you live in', () => {
     const blocked = await updateHome(patch({ use: 'own' }), params(rental.id));
     expect(blocked.status).toBe(409);
     expect((await json(blocked)).message).toMatch(/active lease/);
+    // Ended leases still keep it a rental, so its Schedule E history isn't lost.
+    const { leases } = await import('@/db/schema');
+    const { db } = await import('@/db');
+    await db.update(leases).set({ status: 'ended' });
+    const stillBlocked = await updateHome(patch({ use: 'own' }), params(rental.id));
+    expect(stillBlocked.status).toBe(409);
+    expect((await json(stillBlocked)).message).toMatch(/rental history/);
 
     // A homeowner category that a rental doesn't have stops the switch back.
     await addTx(jsonRequest({ type: 'capital', category: 'improvement', date: '2026-09-01', amount: '100' }), params(homeId));

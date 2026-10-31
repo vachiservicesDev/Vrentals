@@ -245,7 +245,7 @@ function Lines({ lines, empty, total, totalLabel }: { lines: HomeLine[]; empty: 
     <table className="w-full text-left">
       <tbody className="divide-y divide-line">
         {lines.map((l) => (
-          <Row key={l.category} label={l.label} note={l.form} amount={l.amount} />
+          <Row key={l.category} label={l.label} note={[l.form, l.note].filter(Boolean).join(' · ') || undefined} amount={l.amount} />
         ))}
         {total !== undefined && totalLabel && <Row label={totalLabel} amount={total} strong />}
       </tbody>

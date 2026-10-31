@@ -141,6 +141,7 @@ export interface HomeTaxSummary {
   /** Costs that aren't deductible for a home you live in. */
   notDeductible: HomeLine[];
   pmiNotDeductible: number;
+  /** propertyTax is what was paid; Schedule A shows it only up to `cap`. */
   salt: { propertyTax: number; cap: number; separate: number; phaseOutAbove: number | null };
   standardDeduction: { single: number; mfj: number; hoh: number } | null;
   improvementsThisYear: HomeLine[];
@@ -222,8 +223,13 @@ export function buildHomeTaxSummary(ledger: HomeLedgerRow[], info: HomeInfo, yea
 
   const spending = [...spent.entries()].map(([k, c]) => line('expense', k, c)).sort(byAmount);
   const pmiOk = pmiDeductible(year);
-  const scheduleA = spending.filter((l) => homeCategoryOf('expense', l.category)?.treatment === 'schedule_a' && (l.category !== 'mortgage_insurance' || pmiOk));
-  const notDeductible = spending.filter((l) => !scheduleA.includes(l));
+  const cap = saltCap(year);
+  // Property tax counts only up to the SALT cap (before any income phase-out, which the app can't know).
+  const scheduleA = spending
+    .filter((l) => homeCategoryOf('expense', l.category)?.treatment === 'schedule_a' && (l.category !== 'mortgage_insurance' || pmiOk))
+    .map((l) => (l.category === 'property_tax' && l.amount > cap.cap ? { ...l, amount: cap.cap, note: `$${l.amount.toLocaleString("en-US")} paid, capped at the SALT limit` } : l));
+  const deductible = new Set(scheduleA.map((l) => l.category));
+  const notDeductible = spending.filter((l) => !deductible.has(l.category));
   const pmiNotDeductible = pmiOk ? 0 : dollars(spent.get('mortgage_insurance') ?? 0);
   const improvementsThisYear = [...improved.entries()].map(([k, c]) => line('capital', k, c)).sort(byAmount);
 
@@ -255,7 +261,6 @@ export function buildHomeTaxSummary(ledger: HomeLedgerRow[], info: HomeInfo, yea
     };
   }
 
-  const cap = saltCap(year);
   return {
     year,
     spending,

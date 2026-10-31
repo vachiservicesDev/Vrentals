@@ -90,8 +90,13 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
  */
 async function changeBlocked(propertyId: string, to: 'rental' | 'own'): Promise<string | null> {
   if (to === 'own') {
-    const [lease] = await db.select({ id: leases.id }).from(leases).where(and(eq(leases.propertyId, propertyId), eq(leases.status, 'active'))).limit(1);
-    if (lease) return 'This home has an active lease. End the lease before marking it as the home you live in.';
+    // Its rent and rental expenses belong on Schedule E for the years it was rented, so a home with
+    // any lease stays a rental. Add the home again as one you live in to track it from move-in.
+    const [lease] = await db.select({ status: leases.status }).from(leases).where(eq(leases.propertyId, propertyId)).limit(1);
+    if (lease)
+      return lease.status === 'active'
+        ? 'This home has an active lease. A home with rental history stays a rental so its Schedule E records are kept; add it again as a home you live in instead.'
+        : 'This home has rental history, which stays on Schedule E. To track it now that you live there, add it again as a new home and choose “I live here”.';
     const [listing] = await db.select({ id: listings.id }).from(listings).where(and(eq(listings.propertyId, propertyId), eq(listings.active, true))).limit(1);
     if (listing) return 'This home is listed for rent. Take the listing down before marking it as the home you live in.';
   }
