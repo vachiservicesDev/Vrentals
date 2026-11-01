@@ -37,6 +37,14 @@ export default function ExpensesPage() {
   const byType = [...spending.reduce((m, t) => m.set(label(t), (m.get(label(t)) ?? 0) + Number(t.amount)), new Map<string, number>())].sort((a, b) => b[1] - a[1]);
   const biggest = byType[0]?.[1] ?? 1;
   const allOwn = homes.length > 0 && homes.every((h) => h.use === 'own');
+  // Improvements to a home you live in add to its cost basis; on a rental they're depreciated.
+  // With both kinds of home and no home chosen, say both.
+  const shownHomes = homeFilter ? homes.filter((h) => h.id === homeFilter) : homes;
+  const improvementHint = shownHomes.every((h) => h.use === 'own')
+    ? 'Add to your cost basis'
+    : shownHomes.every((h) => h.use !== 'own')
+      ? 'Depreciated over the years'
+      : 'Rentals: depreciated. Your home: add to cost basis';
 
   async function upload(t: Entry, file: File) {
     setRowError(null);
@@ -120,7 +128,7 @@ export default function ExpensesPage() {
 
             <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Tile label={`Paid in ${year}`} value={formatMoney(total)} hint={`${spending.length} ${spending.length === 1 ? 'entry' : 'entries'}`} />
-              <Tile label="Improvements" value={formatMoney(improvements)} hint={allOwn ? 'Add to your cost basis' : 'Depreciated over the years'} />
+              <Tile label="Improvements" value={formatMoney(improvements)} hint={improvementHint} />
               <Tile label="Biggest cost" value={byType[0] ? byType[0][0] : '—'} hint={byType[0] ? formatMoney(byType[0][1]) : undefined} />
               <Tile label="Missing a receipt" value={String(missing)} hint={missing ? 'Use Upload in the list' : 'All attached'} tone={missing ? 'warning' : undefined} />
             </dl>

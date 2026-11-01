@@ -51,6 +51,7 @@ interface Lease {
   lateFee: string | null;
   securityDeposit: string | null;
   status: string;
+  createdAt: string;
   agreement: { id: string; status: 'draft' | 'sent' | 'signed' } | null;
 }
 interface Prefill {
@@ -183,8 +184,10 @@ export default function RentalHomePage() {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const leaseStartWindow = lease ? new Date(Date.parse(`${lease.startDate}T00:00:00Z`) - 60 * 86_400_000).toISOString() : '';
-  const inspections = lease ? (docs.data?.documents ?? []).filter((d) => d.kind === 'inspection' && d.createdAt >= leaseStartWindow).length : 0;
+  // Only inspections added since this lease was created count, so a past tenant's move-in or
+  // move-out report never marks the new tenancy's move-in as done.
+  const leaseCreated = lease ? new Date(lease.createdAt).getTime() : 0;
+  const inspections = lease ? (docs.data?.documents ?? []).filter((d) => d.kind === 'inspection' && new Date(d.createdAt).getTime() >= leaseCreated).length : 0;
   const current = landlordStep({ applications: apps.data?.applications ?? [], lease, inspections, today });
   const shown = step ?? current;
   const charge = lease ? charges.filter((c) => c.leaseId === lease.id) : [];
