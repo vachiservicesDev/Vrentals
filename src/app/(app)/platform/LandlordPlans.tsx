@@ -6,6 +6,7 @@ import { licenseStatus, planLabel, type LicenseStatus } from '@/lib/rentals/plan
 import { Button } from '@/components/ui/Button';
 import { CheckboxField, FieldRow, SelectField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
+import { Prices } from './Prices';
 import { Alert, Chip, DataTable, EmptyState, Loading, Panel, When, type Tone } from '@/components/ui/ui';
 
 interface Landlord {
@@ -63,6 +64,7 @@ export function LandlordPlans({ selfId }: { selfId: string }) {
     <div className="grid gap-8">
       <InviteForm onCreated={invites.reload} />
       <InviteList invites={invites.data?.invites ?? []} loading={invites.loading} onChange={invites.reload} />
+      <Prices />
 
       {editing && (
         <PlanForm

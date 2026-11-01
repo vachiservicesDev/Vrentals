@@ -1,9 +1,10 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
-// /api/cron and /api/stripe/webhook check their own secrets instead of a session; /rent and
-// /api/public are the open listing pages anyone can visit.
-const PUBLIC_PATHS = ['/login', '/signup', '/auth', '/forgot-password', '/api/auth/forgot-password', '/api/cron/', '/api/stripe/webhook', '/rent/', '/api/public/'];
+// /api/cron and the /api/stripe webhooks check their own secrets instead of a session; /rent and
+// /api/public are the open listing pages anyone can visit; /pricing and /api/billing let anyone
+// buy a plan.
+const PUBLIC_PATHS = ['/login', '/signup', '/auth', '/forgot-password', '/api/auth/forgot-password', '/api/cron/', '/api/stripe/webhook', '/api/stripe/billing', '/rent/', '/api/public/', '/pricing', '/api/billing/'];
 
 // Refreshes the Supabase session cookie on every request and sends signed-out visitors to
 // sign-in. Who may see what is checked by each page and API route.

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Logo } from '@/components/ui/Logo';
 import { buttonClass } from '@/components/ui/Button';
@@ -6,6 +7,7 @@ import { BottomNav } from '@/components/shell/BottomNav';
 import { Footer } from '@/components/shell/Footer';
 import { Alert } from '@/components/ui/ui';
 import { LAPSED_MESSAGE, planLapsed } from '@/lib/rentals/plans';
+import { billingConfigured } from '@/lib/rentals/billing';
 import { homeFor, requireSession } from '@/lib/auth/session';
 import { signOutAction } from '../actions';
 
@@ -72,6 +74,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="mb-6">
             <Alert tone="info" title="Your plan has ended">
               {LAPSED_MESSAGE}
+              {billingConfigured() && (
+                <>
+                  {' '}
+                  <Link href="/pricing" className="link font-semibold">
+                    Renew online
+                  </Link>
+                </>
+              )}
             </Alert>
           </div>
         )}

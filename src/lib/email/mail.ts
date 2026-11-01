@@ -126,3 +126,24 @@ export function coLandlordEmail(name: string, ownerName: string, url: string) {
   );
   return { subject, html, text: `Hi ${first},\n\n${intro}\n\nChoose a password here:\n${url}` };
 }
+
+/** To someone who paid for a Vrentals plan online: their one-time sign-up link. */
+export function planPurchaseEmail(name: string, planName: string, url: string) {
+  const first = name.trim().split(/\s+/)[0] || 'there';
+  const subject = 'Your Vrentals account is ready to set up';
+  const intro = `Thank you for buying the ${planName} plan. Your payment went through, and your account is ready for you.`;
+  const html = layout(
+    `Hi ${escape(first)},`,
+    [escape(intro), 'Use the button below to create your account. It takes about a minute.'],
+    { label: 'Create my account', url },
+    'This link works once, for this email address. Keep it to yourself.',
+  );
+  return { subject, html, text: `Hi ${first},\n\n${intro}\n\nCreate your account here:\n${url}\n\nThis link works once, for this email address.` };
+}
+
+/** To Vachi staff: a plan was paid for online. */
+export function adminPaymentEmail(summary: string, url: string) {
+  const subject = 'New Vrentals payment';
+  const html = layout('New payment', [escape(summary)], { label: 'Open Licenses', url }, 'You get this because you manage Vrentals licenses.');
+  return { subject, html, text: `${summary}\n\n${url}` };
+}
