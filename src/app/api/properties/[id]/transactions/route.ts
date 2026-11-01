@@ -5,6 +5,7 @@ import { transactions } from '@/db/schema';
 import { requireLandlord } from '@/lib/auth/guards';
 import { ownedProperty } from '@/lib/rentals/access';
 import { dec, transactionSchemaFor } from '@/lib/rentals/schemas';
+import { withReceipts } from '@/lib/rentals/expenseReceipts';
 
 const isDay = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     .from(transactions)
     .where(and(eq(transactions.propertyId, property.id), isDay(from) ? gte(transactions.date, from) : undefined, isDay(to) ? lte(transactions.date, to) : undefined))
     .orderBy(desc(transactions.date), desc(transactions.createdAt));
-  return NextResponse.json({ transactions: rows });
+  return NextResponse.json({ transactions: await withReceipts(rows) });
 }
 
 /** Adds an expense, an income entry or a deposit to a home. */

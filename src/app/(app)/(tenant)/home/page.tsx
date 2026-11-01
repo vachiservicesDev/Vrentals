@@ -2,10 +2,12 @@
 
 import { formValues, useAction, useResource } from '@/lib/client/api';
 import { REPAIR_URGENCIES, statusOf } from '@/lib/status';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
+import { LeasingPath } from '@/components/leasing/LeasingPath';
+import { ACTIVE_STEP, tenantStep } from '@/lib/rentals/leasingPath';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
-import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatMoney } from '@/components/ui/ui';
+import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatDate, formatMoney } from '@/components/ui/ui';
 
 interface Rental {
   home: { name: string; address: string; city: string | null; state: string; zip: string | null };
@@ -57,15 +59,36 @@ export default function TenantRentalPage() {
   const owedTotal = owed.reduce((sum, c) => sum + Number(c.amount) - Number(c.paidAmount), 0);
   const latest = charges[0];
   const openRepairs = repairs.filter((r) => r.status === 'open' || r.status === 'scheduled');
+  const step = tenantStep({ agreement: rental.agreement, startDate: lease.startDate, today: new Date().toISOString().slice(0, 10) });
 
   return (
     <>
       <PageHeader eyebrow="Your rental" title={home.name} lead={[home.address, home.city, `${home.state} ${home.zip ?? ''}`.trim()].filter(Boolean).join(', ')} />
       <div className="grid gap-8">
-        {rental.agreement?.status === 'sent' && (
-          <Alert tone="info" title="Your lease is ready to sign">
-            Your landlord signed your written lease. <TextLink href={`/agreements/${rental.agreement.id}`}>Read and sign it</TextLink>.
-          </Alert>
+        {step < ACTIVE_STEP && (
+          <Panel title="Your move-in progress" description="Where you are, from your application to moving in.">
+            <LeasingPath current={step} who={(i) => (i === 3 ? 'You sign' : 'You and your landlord')} />
+            <div className="mt-5 rounded-lg bg-brand-50 p-4">
+              {step === 3 && rental.agreement ? (
+                <>
+                  <p className="font-semibold text-ink">Next: read and sign your lease</p>
+                  <p className="mt-1 text-ink-2">Your landlord has signed it. It takes about 5 minutes.</p>
+                  <p className="mt-3">
+                    <a href={`/agreements/${rental.agreement.id}`} className={buttonClass('primary')}>
+                      Read and sign
+                    </a>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-ink">Next: move in on {formatDate(lease.startDate)}</p>
+                  <p className="mt-1 text-ink-2">
+                    Walk through the home with your landlord on move-in day. Note anything already damaged and take photos, so it isn&apos;t counted against your deposit when you move out.
+                  </p>
+                </>
+              )}
+            </div>
+          </Panel>
         )}
         <Panel
           title="Rent"

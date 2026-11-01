@@ -19,6 +19,7 @@ export interface Transaction {
   paidFrom: string;
   description: string | null;
   sourceType: string | null;
+  receipt?: { id: string; name: string; fileName: string } | null;
 }
 
 interface Summary {
@@ -32,7 +33,7 @@ interface HomeSummary {
 const TYPE_LABEL: Record<string, string> = { expense: 'Expense', income: 'Income', capital: 'Improvement', deposit: 'Deposit' };
 
 /** A rental files under Schedule E; a home you live in has its own payment and improvement categories. */
-function catalog(own: boolean) {
+export function catalog(own: boolean) {
   return {
     types: own ? [...HOME_TRANSACTION_TYPES] : [...TRANSACTION_TYPES],
     categoryOf: (type: string, category: string): Category | HomeCategory | undefined => (own ? homeCategoryOf(type, category) : categoryOf(type, category)),
@@ -126,6 +127,11 @@ export function MoneyPanel({ propertyId, reloadKey, own = false }: { propertyId:
                   <span>
                     {cat.categoryOf(t.type, t.category)?.label ?? t.category}
                     <span className="block text-sm font-normal text-muted">{[t.payee, t.description].filter(Boolean).join(' · ') || TYPE_LABEL[t.type]}</span>
+                    {t.receipt && (
+                      <a href={`/api/documents/${t.receipt.id}`} target="_blank" rel="noopener" className="link block text-sm font-normal">
+                        Receipt: {t.receipt.fileName}
+                      </a>
+                    )}
                   </span>
                 ),
               },

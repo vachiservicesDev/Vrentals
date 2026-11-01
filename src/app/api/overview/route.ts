@@ -25,7 +25,7 @@ export async function GET() {
     .where(eq(properties.ownerId, gate.ownerId));
   const ids = homes.map((h) => h.id);
   const nameOf = new Map(homes.map((h) => [h.id, h.name]));
-  if (!ids.length) return NextResponse.json({ homes: 0, occupied: 0, month, expected: 0, collected: 0, behind: [], repairs: [], reminders: [] });
+  if (!ids.length) return NextResponse.json({ kind: gate.owner.kind, homes: 0, occupied: 0, month, expected: 0, collected: 0, behind: [], repairs: [], reminders: [] });
 
   const [leaseRows, repairs, reminderRows] = await Promise.all([
     db.select().from(leases).where(inArray(leases.propertyId, ids)),
@@ -73,6 +73,7 @@ export async function GET() {
   repairs.sort((a, b) => rank(a) - rank(b) || (a.appointmentAt?.getTime() ?? 0) - (b.appointmentAt?.getTime() ?? 0));
 
   return NextResponse.json({
+    kind: gate.owner.kind,
     homes: homes.length,
     occupied: new Set(leaseRows.filter((l) => l.status === 'active').map((l) => l.propertyId)).size,
     month,

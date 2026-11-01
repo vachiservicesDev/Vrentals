@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useAction } from '@/lib/client/api';
-import { Button } from '@/components/ui/Button';
-import { CheckboxField, FieldRow, Fieldset, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
+import { StepForm } from '@/components/ui/StepForm';
+import { CheckboxField, FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
 import { Alert, Panel } from '@/components/ui/ui';
 
@@ -29,9 +29,8 @@ export function ApplicationForm({ listingId, landlordName }: { listingId: string
   const [sent, setSent] = useState(false);
   const [eviction, setEviction] = useState('no');
 
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  async function submit(form: HTMLFormElement) {
+    const fd = new FormData(form);
     const body: Record<string, unknown> = {};
     fd.forEach((v, k) => {
       if (typeof v === 'string' && v.trim() !== '') body[k] = v.trim();
@@ -54,9 +53,19 @@ export function ApplicationForm({ listingId, landlordName }: { listingId: string
   const errors = action.fieldErrors;
   return (
     <Panel>
-      <form onSubmit={submit} noValidate className="grid gap-10">
-        <FormStatus error={action.error} success={action.success} fieldErrors={errors} labels={LABELS} />
-        <Fieldset legend="About you">
+      <StepForm
+        onSubmit={submit}
+        submitLabel="Send application"
+        busy={action.busy === 'apply'}
+        busyLabel="Sending…"
+        fieldErrors={errors}
+        status={<FormStatus error={action.error} success={action.success} fieldErrors={errors} labels={LABELS} />}
+        steps={[
+          {
+            title: 'About you', hint: 'Who you are and when you would like to move in.',
+            content: (
+              <>
+
           <FieldRow cols={3}>
             <TextField name="fullName" label="Full name" required autoComplete="name" errors={errors} />
             <TextField name="email" label="Email" type="email" required autoComplete="email" errors={errors} />
@@ -67,9 +76,14 @@ export function ApplicationForm({ listingId, landlordName }: { listingId: string
             <TextField name="adults" label="Adults who will live here" type="number" min={1} required defaultValue="1" errors={errors} />
             <TextField name="children" label="Children who will live here" type="number" min={0} defaultValue="0" errors={errors} />
           </FieldRow>
-        </Fieldset>
+              </>
+            ),
+          },
+          {
+            title: 'Where you live now',
+            content: (
+              <>
 
-        <Fieldset legend="Where you live now">
           <TextField name="currentAddress" label="Current address" required autoComplete="street-address" errors={errors} />
           <FieldRow cols={3}>
             <TextField name="currentSince" label="Living there since" hint="Month and year is fine." errors={errors} />
@@ -81,9 +95,14 @@ export function ApplicationForm({ listingId, landlordName }: { listingId: string
             <TextField name="currentLandlordPhone" label="Current landlord's phone" type="tel" errors={errors} />
           </FieldRow>
           <TextField name="previousAddress" label="Previous address" hint="If you've lived at your current address under two years." errors={errors} />
-        </Fieldset>
+              </>
+            ),
+          },
+          {
+            title: 'Work and income',
+            content: (
+              <>
 
-        <Fieldset legend="Work and income">
           <FieldRow cols={3}>
             <TextField name="employer" label="Employer" autoComplete="organization" errors={errors} />
             <TextField name="jobTitle" label="Job title" errors={errors} />
@@ -102,9 +121,14 @@ export function ApplicationForm({ listingId, landlordName }: { listingId: string
             />
             <TextField name="incomeNotes" label="Anything to add about income" hint="For example, a housing voucher or a new job starting." errors={errors} />
           </FieldRow>
-        </Fieldset>
+              </>
+            ),
+          },
+          {
+            title: 'Household',
+            content: (
+              <>
 
-        <Fieldset legend="Household and references">
           <FieldRow>
             <TextField name="pets" label="Pets" hint="Kind, breed and weight. Assistance animals aren't pets; you don't need to list them." errors={errors} />
             <TextField name="vehicles" label="Vehicles" hint="How many, and make and model." errors={errors} />
@@ -129,22 +153,25 @@ export function ApplicationForm({ listingId, landlordName }: { listingId: string
             {eviction === 'yes' ? <TextField name="evictionDetails" label="What happened" errors={errors} /> : <div />}
           </FieldRow>
           <TextAreaField name="additionalInfo" label="Anything else you'd like the landlord to know" rows={3} errors={errors} />
-        </Fieldset>
+              </>
+            ),
+          },
+          {
+            title: 'Sign',
+            content: (
+              <>
 
-        <Fieldset legend="Sign">
           <p className="text-sm text-muted">
             A credit and background check may be requested later through a screening company, with your separate permission. Don&apos;t enter your Social Security number here.
           </p>
           <CheckboxField name="certify" label="My answers are true and complete, and the landlord may contact my references and landlords." errors={errors} />
           <TextField name="signedName" label="Type your full name to sign" required autoComplete="name" errors={errors} />
           <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
-          <div>
-            <Button type="submit" busy={action.busy === 'apply'} busyLabel="Sending…">
-              Send application
-            </Button>
-          </div>
-        </Fieldset>
-      </form>
+              </>
+            ),
+          },
+        ]}
+      />
     </Panel>
   );
 }

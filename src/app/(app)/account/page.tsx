@@ -19,7 +19,7 @@ export default async function AccountPage() {
       <PageHeader title="Account" />
       <div className="grid gap-8">
         <Panel title="Your details" description={landlord ? 'Your tenants see this name, email and phone as their contact.' : undefined}>
-          <AccountForm fullName={account.fullName ?? ''} phone={account.phone ?? ''} />
+          <AccountForm fullName={account.fullName ?? ''} phone={account.phone ?? ''} kind={landlord && !account.actsFor ? account.kind : undefined} />
         </Panel>
         {landlord && <TeamPanel />}
         {landlord && <PaymentsPanel />}
@@ -27,7 +27,7 @@ export default async function AccountPage() {
           <DetailList
             items={[
               { label: 'Email', value: account.email },
-              { label: 'Account type', value: landlord ? (account.actsFor ? 'Co-landlord' : 'Landlord') : 'Tenant' },
+              { label: 'Account type', value: landlord ? (account.actsFor ? 'Co-landlord' : account.kind === 'homeowner' ? 'Homeowner' : 'Landlord') : 'Tenant' },
               ...(landlord && !account.actsFor ? [{ label: 'Plan', value: planLapsed(account) ? `${planLabel(account)} (ended: read-only)` : planLabel(account) }] : []),
             ]}
           />

@@ -22,6 +22,7 @@ export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<'homeowner' | 'landlord'>('landlord');
   const errorRef = useRef<HTMLParagraphElement>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -40,7 +41,7 @@ export function SignupForm() {
       email,
       password,
       options: {
-        data: { signup_role: 'landlord', full_name: String(form.get('fullName') ?? '').trim() },
+        data: { signup_role: 'landlord', account_kind: kind, full_name: String(form.get('fullName') ?? '').trim() },
         emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
       },
     });
@@ -69,6 +70,27 @@ export function SignupForm() {
           {error}
         </p>
       )}
+      <fieldset className="grid gap-2">
+        <legend className="mb-1 text-sm font-semibold text-ink">What will you use Vrentals for?</legend>
+        {(
+          [
+            ['homeowner', 'The home I live in', 'Bills, repairs, documents and a year-end tax summary.'],
+            ['landlord', 'Homes I rent out', 'Tenants, rent, leases, repairs and expenses.'],
+          ] as const
+        ).map(([value, title, text]) => (
+          <label
+            key={value}
+            className={`flex cursor-pointer items-start gap-3 rounded-[10px] border px-4 py-3 ${kind === value ? 'border-brand-600 bg-brand-50 ring-2 ring-brand-600/20' : 'border-line-strong hover:border-brand-600'}`}
+          >
+            <input type="radio" name="accountKind" value={value} checked={kind === value} onChange={() => setKind(value)} className="mt-1 h-4 w-4 accent-brand-700" />
+            <span>
+              <span className="block font-semibold text-ink">{title}</span>
+              <span className="block text-sm text-ink-2">{text}</span>
+            </span>
+          </label>
+        ))}
+        <p className="text-sm text-muted">Both? Pick either one. You can add both kinds of home.</p>
+      </fieldset>
       <TextField name="fullName" label="Your name" required hideOptional autoComplete="name" />
       <TextField name="email" label="Email" type="email" required hideOptional autoComplete="email" inputMode="email" />
       <TextField name="password" label="Password" type="password" required hideOptional autoComplete="new-password" hint="At least 10 characters." />

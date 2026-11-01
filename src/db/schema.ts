@@ -19,6 +19,9 @@ export const accounts = rentals.table('accounts', {
   id: uuid('id').primaryKey(), // auth.users.id
   email: varchar('email', { length: 255 }).notNull().unique(),
   role: roleEnum('role').notNull(),
+  // What they use Vrentals for, chosen at sign-up: 'landlord' (homes they rent out) or 'homeowner'
+  // (the home they live in). Only menus and wording change; either can add both kinds of home.
+  kind: varchar('kind', { length: 10 }).notNull().default('landlord'),
   fullName: varchar('full_name', { length: 200 }),
   phone: varchar('phone', { length: 30 }),
   // A co-landlord (a spouse or partner) manages the homes of the landlord named here, with the same
@@ -234,6 +237,8 @@ export const documents = rentals.table('documents', {
   storagePath: text('storage_path').notNull().unique(),
   expiresOn: date('expires_on'), // a policy's end date, for example
   notes: text('notes'),
+  // The money entry this is the bill or receipt for, if any.
+  transactionId: uuid('transaction_id').references(() => transactions.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

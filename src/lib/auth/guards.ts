@@ -17,7 +17,7 @@ export async function accountFor(user: Pick<User, 'id' | 'email' | 'user_metadat
   if (user.user_metadata?.signup_role !== 'landlord' || !user.email) return null;
   const [created] = await db
     .insert(accounts)
-    .values({ id: user.id, email: user.email.toLowerCase(), role: 'landlord', fullName: user.user_metadata?.full_name || null, ...trialPlan() })
+    .values({ id: user.id, email: user.email.toLowerCase(), role: 'landlord', kind: user.user_metadata?.account_kind === 'homeowner' ? 'homeowner' : 'landlord', fullName: user.user_metadata?.full_name || null, ...trialPlan() })
     .onConflictDoNothing()
     .returning();
   return created ?? (await db.select().from(accounts).where(eq(accounts.id, user.id)).limit(1))[0] ?? null;

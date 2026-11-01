@@ -12,8 +12,8 @@ export default async function SignupPage() {
   if (session?.account) redirect(homeFor(session.account.role));
   return (
     <AuthCard
-      title="Create a landlord account"
-      lead="Track rent, schedule repairs and keep insurance and HOA dates in one place. Free while we're getting started."
+      title="Create your account"
+      lead="Keep bills, repairs, insurance and HOA dates for your home or your rentals in one place. Free while we're getting started."
       footer={
         <>
           Already have an account? <Link href="/login" className="link">Sign in</Link>.
