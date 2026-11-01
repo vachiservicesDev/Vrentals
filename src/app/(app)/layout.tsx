@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Logo } from '@/components/ui/Logo';
 import { buttonClass } from '@/components/ui/Button';
 import { TopNav } from '@/components/shell/TopNav';
+import { GlobalSearch } from '@/components/shell/GlobalSearch';
 import { BottomNav } from '@/components/shell/BottomNav';
 import { Footer } from '@/components/shell/Footer';
 import { Alert } from '@/components/ui/ui';
@@ -55,6 +56,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mx-auto w-full max-w-5xl px-4 md:px-8">
           <div className="flex min-h-16 items-center justify-between gap-4">
             <Logo href={homeFor(session.account.role)} />
+            {landlord && (
+              <div className="flex flex-1 justify-end md:justify-center">
+                <GlobalSearch />
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <span className="hidden max-w-56 truncate text-sm text-muted sm:inline">{session.email}</span>
               <form action={signOutAction}>

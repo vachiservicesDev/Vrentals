@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/db';
 import { accounts, licenseInvites, planPurchases, platformAdmins, pricePlans } from '@/db/schema';
 import { addMonths, todayEastern } from '@/lib/dates';
-import { adminPaymentEmail, planPurchaseEmail, sendMail, smtpConfigured } from '@/lib/email/mail';
+import { planPurchaseEmail, sendMail, smtpConfigured } from '@/lib/email/mail';
 import { notify } from '@/lib/notify';
 import { stripe } from '@/lib/stripe';
 import { newInviteToken } from './licenses';
@@ -84,12 +84,11 @@ async function adminRecipients() {
     .innerJoin(accounts, eq(accounts.id, platformAdmins.accountId));
 }
 
-/** Tells every Vachi staff member, in the app and by email when email is set up. */
+/** Tells every Vachi staff member, in the app and (through notify) by email. */
 export async function notifyAdmins(title: string, message: string, appUrl: string, urgent = false): Promise<void> {
   const admins = await adminRecipients();
   for (const admin of admins) {
     await notify({ accountId: admin.id, title, message, urgent, link: '/platform' });
-    if (smtpConfigured()) await sendMail(admin.email, adminPaymentEmail(message, `${appUrl.replace(/\/+$/, '')}/platform`)).catch(() => undefined);
   }
 }
 

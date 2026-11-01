@@ -20,7 +20,7 @@ export default async function AccountPage() {
       <PageHeader title="Account" />
       <div className="grid gap-8">
         <Panel title="Your details" description={landlord ? 'Your tenants see this name, email and phone as their contact.' : undefined}>
-          <AccountForm fullName={account.fullName ?? ''} phone={account.phone ?? ''} kind={landlord && !account.actsFor ? account.kind : undefined} />
+          <AccountForm fullName={account.fullName ?? ''} phone={account.phone ?? ''} emailNotifications={account.emailNotifications} kind={landlord && !account.actsFor ? account.kind : undefined} />
         </Panel>
         {landlord && <TeamPanel />}
         {landlord && <PaymentsPanel />}

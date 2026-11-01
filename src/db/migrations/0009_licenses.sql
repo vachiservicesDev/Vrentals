@@ -66,3 +66,6 @@ DO $$ BEGIN
   CREATE POLICY rentals_app_all ON "rentals"."plan_purchases" FOR ALL TO rentals_app USING (true) WITH CHECK (true);
  END IF;
 END $$;
+--> statement-breakpoint
+-- Every in-app notification is also emailed, unless the person turns that off on their Account page.
+ALTER TABLE "rentals"."accounts" ADD COLUMN IF NOT EXISTS "email_notifications" boolean DEFAULT true NOT NULL;

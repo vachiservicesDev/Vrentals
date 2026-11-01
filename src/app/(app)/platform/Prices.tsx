@@ -132,13 +132,14 @@ function PriceForm({ plan, onDone, onCancel }: { plan: PricePlan | null; onDone:
       <h3 className="font-semibold text-ink">{plan ? `Change ${plan.name}` : 'New price'}</h3>
       <FormStatus error={action.error} fieldErrors={action.fieldErrors} labels={{ name: 'Plan name', homeLimit: 'Homes allowed', months: 'Length', price: 'Price' }} />
       <FieldRow>
-        <TextField name="name" label="Plan name" required defaultValue={plan?.name} hint="For example: Landlord Basic." errors={action.fieldErrors} />
-        <SelectField name="kind" label="For" options={[{ value: 'landlord', label: 'Landlords' }, { value: 'homeowner', label: 'Homeowners' }]} defaultValue={plan?.kind ?? 'landlord'} />
+        <TextField name="name" id="price-name" label="Plan name" required defaultValue={plan?.name} hint="For example: Landlord Basic." errors={action.fieldErrors} />
+        <SelectField name="kind" id="price-kind" label="For" options={[{ value: 'landlord', label: 'Landlords' }, { value: 'homeowner', label: 'Homeowners' }]} defaultValue={plan?.kind ?? 'landlord'} />
       </FieldRow>
       <FieldRow cols={3}>
-        <TextField name="price" label="Price ($)" type="number" inputMode="decimal" min={1} step="0.01" required defaultValue={plan?.price} errors={action.fieldErrors} />
+        <TextField name="price" id="price-price" label="Price ($)" type="number" inputMode="decimal" min={1} step="0.01" required defaultValue={plan?.price} errors={action.fieldErrors} />
         <SelectField
           name="months"
+          id="price-months"
           label="Length"
           options={[
             { value: '1', label: '1 month' },
@@ -148,10 +149,10 @@ function PriceForm({ plan, onDone, onCancel }: { plan: PricePlan | null; onDone:
           ]}
           defaultValue={String(plan?.months ?? 1)}
         />
-        <TextField name="homeLimit" label="Homes allowed" type="number" min={1} defaultValue={plan?.homeLimit ?? ''} hint="Blank for unlimited." errors={action.fieldErrors} />
+        <TextField name="homeLimit" id="price-homeLimit" label="Homes allowed" type="number" min={1} defaultValue={plan?.homeLimit ?? ''} hint="Blank for unlimited." errors={action.fieldErrors} />
       </FieldRow>
-      <TextField name="description" label="Short description" defaultValue={plan?.description ?? ''} hint="Shown on the pricing page." errors={action.fieldErrors} />
-      <CheckboxField name="isActive" label="Show on the pricing page" defaultChecked={plan?.isActive ?? true} />
+      <TextField name="description" id="price-description" label="Short description" defaultValue={plan?.description ?? ''} hint="Shown on the pricing page." errors={action.fieldErrors} />
+      <CheckboxField name="isActive" id="price-isActive" label="Show on the pricing page" defaultChecked={plan?.isActive ?? true} />
       <div className="flex flex-wrap gap-3">
         <Button type="submit" busy={action.busy === 'save'} busyLabel="Saving…">
           Save price

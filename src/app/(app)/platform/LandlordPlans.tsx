@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAction, useResource } from '@/lib/client/api';
 import { licenseStatus, planLabel, type LicenseStatus } from '@/lib/rentals/plans';
 import { Button } from '@/components/ui/Button';
@@ -46,6 +47,15 @@ const STATUS: Record<LicenseStatus, [Tone, string]> = {
   free: ['muted', 'Unpaid, no end date'],
 };
 
+type SortKey = 'newest' | 'oldest' | 'name' | 'ends' | 'homes';
+const SORTS: Record<SortKey, { label: string; compare: (a: Landlord, b: Landlord) => number }> = {
+  newest: { label: 'Newest first', compare: (a, b) => b.createdAt.localeCompare(a.createdAt) },
+  oldest: { label: 'Oldest first', compare: (a, b) => a.createdAt.localeCompare(b.createdAt) },
+  name: { label: 'Name, A to Z', compare: (a, b) => (a.fullName || a.email).localeCompare(b.fullName || b.email) },
+  ends: { label: 'License ends soonest', compare: (a, b) => (a.planExpires ?? '9999').localeCompare(b.planExpires ?? '9999') },
+  homes: { label: 'Most homes', compare: (a, b) => b.homes - a.homes },
+};
+
 const KINDS = [
   { value: 'landlord', label: 'Landlord' },
   { value: 'homeowner', label: 'Homeowner' },
@@ -57,13 +67,33 @@ export function LandlordPlans({ selfId }: { selfId: string }) {
   const { data, error, loading, reload } = useResource<{ landlords: Landlord[] }>('/api/platform/landlords');
   const invites = useResource<{ invites: Invite[] }>('/api/platform/invites');
   const [editing, setEditing] = useState<Landlord | null>(null);
+  const params = useSearchParams();
+  const [q, setQ] = useState(params.get('q') ?? '');
+  const [status, setStatus] = useState<'' | LicenseStatus>('');
+  const [kind, setKind] = useState('');
+  const [sort, setSort] = useState<SortKey>('newest');
+  const term = q.trim().toLowerCase();
+  const shown = useMemo(() => {
+    const rows = (data?.landlords ?? []).filter(
+      (l) =>
+        (!term || `${l.fullName ?? ''} ${l.email}`.toLowerCase().includes(term)) &&
+        (!status || licenseStatus(l) === status) &&
+        (!kind || l.kind === kind),
+    );
+    return [...rows].sort(SORTS[sort].compare);
+  }, [data, term, status, kind, sort]);
+  const shownInvites = useMemo(
+    () => (invites.data?.invites ?? []).filter((i) => !term || `${i.email ?? ''} ${i.note ?? ''} ${i.usedByEmail ?? ''}`.toLowerCase().includes(term)),
+    [invites.data, term],
+  );
   if (loading) return <Loading />;
   if (error || !data) return <Alert>{error ?? 'Not found'}</Alert>;
+  const filtered = !!(term || status || kind);
 
   return (
     <div className="grid gap-8">
       <InviteForm onCreated={invites.reload} />
-      <InviteList invites={invites.data?.invites ?? []} loading={invites.loading} onChange={invites.reload} />
+      <InviteList invites={shownInvites} loading={invites.loading} onChange={invites.reload} />
       <Prices />
 
       {editing && (
@@ -78,13 +108,75 @@ export function LandlordPlans({ selfId }: { selfId: string }) {
         />
       )}
 
-      <Panel title="Accounts and licenses" description={`${data.landlords.length} ${data.landlords.length === 1 ? 'account' : 'accounts'}`}>
-        {data.landlords.length === 0 ? (
-          <EmptyState>No accounts yet. Send an invitation link above.</EmptyState>
+      <Panel
+        title="Accounts and licenses"
+        description={filtered ? `${shown.length} of ${data.landlords.length} accounts` : `${data.landlords.length} ${data.landlords.length === 1 ? 'account' : 'accounts'}`}
+      >
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="grid gap-1 text-sm font-semibold text-ink sm:col-span-2 lg:col-span-1">
+            Search
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Name or email"
+              className="min-h-11 rounded-[10px] border border-line-strong bg-white px-3 font-normal"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-ink">
+            Status
+            <select value={status} onChange={(e) => setStatus(e.target.value as '' | LicenseStatus)} className="min-h-11 rounded-[10px] border border-line-strong bg-white px-3 font-normal">
+              <option value="">All</option>
+              {(Object.keys(STATUS) as LicenseStatus[]).map((k) => (
+                <option key={k} value={k}>
+                  {STATUS[k][1]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-ink">
+            Type
+            <select value={kind} onChange={(e) => setKind(e.target.value)} className="min-h-11 rounded-[10px] border border-line-strong bg-white px-3 font-normal">
+              <option value="">All</option>
+              {KINDS.map((k) => (
+                <option key={k.value} value={k.value}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-ink">
+            Sort by
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="min-h-11 rounded-[10px] border border-line-strong bg-white px-3 font-normal">
+              {(Object.keys(SORTS) as SortKey[]).map((k) => (
+                <option key={k} value={k}>
+                  {SORTS[k].label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {filtered && (
+          <p className="mb-4">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setQ('');
+                setStatus('');
+                setKind('');
+              }}
+            >
+              Clear filters
+            </Button>
+          </p>
+        )}
+        {shown.length === 0 ? (
+          <EmptyState>{data.landlords.length === 0 ? 'No accounts yet. Send an invitation link above.' : 'No accounts match.'}</EmptyState>
         ) : (
           <DataTable
             caption="Accounts and their licenses"
-            rows={data.landlords}
+            rows={shown}
             rowKey={(l) => l.id}
             columns={[
               { header: 'Account', primary: true, cell: (l) => <span>{l.fullName || l.email}<span className="block text-sm font-normal text-muted">{l.email}{l.coLandlords ? ` · ${l.coLandlords} co-landlord${l.coLandlords > 1 ? 's' : ''}` : ''}</span></span> },
@@ -261,13 +353,13 @@ function PlanForm({ landlord: l, onDone, onCancel }: { landlord: Landlord; onDon
       <form onSubmit={save} noValidate className="grid gap-5">
         <FormStatus error={action.error} success={action.success} fieldErrors={action.fieldErrors} labels={{ homeLimit: 'Homes allowed', planExpires: 'License ends' }} />
         <FieldRow>
-          <TextField name="homeLimit" label="Homes allowed" type="number" min={0} defaultValue={l.homeLimit ?? ''} hint="Blank for no limit." errors={action.fieldErrors} />
-          <TextField name="planExpires" label="License ends" type="date" defaultValue={l.planExpires ?? ''} hint="Blank for no end date. After it, the account is read-only." errors={action.fieldErrors} />
+          <TextField name="homeLimit" id="plan-homeLimit" label="Homes allowed" type="number" min={0} defaultValue={l.homeLimit ?? ''} hint="Blank for no limit." errors={action.fieldErrors} />
+          <TextField name="planExpires" id="plan-planExpires" label="License ends" type="date" defaultValue={l.planExpires ?? ''} hint="Blank for no end date. After it, the account is read-only." errors={action.fieldErrors} />
         </FieldRow>
         <FieldRow>
-          <SelectField name="isActive" label="Account" options={[{ value: 'yes', label: 'Active' }, { value: 'no', label: 'Suspended (cannot sign in)' }]} defaultValue={l.isActive ? 'yes' : 'no'} />
+          <SelectField name="isActive" id="plan-isActive" label="Account" options={[{ value: 'yes', label: 'Active' }, { value: 'no', label: 'Suspended (cannot sign in)' }]} defaultValue={l.isActive ? 'yes' : 'no'} />
           <div className="sm:pt-8">
-            <CheckboxField name="planPaid" label="Paid" defaultChecked={l.planPaid} />
+            <CheckboxField name="planPaid" id="plan-planPaid" label="Paid" defaultChecked={l.planPaid} />
           </div>
         </FieldRow>
         <div className="flex flex-wrap gap-3">

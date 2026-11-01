@@ -38,6 +38,8 @@ export const accounts = rentals.table('accounts', {
   planExpires: date('plan_expires'),
   // Whether the plan has been paid for. Set by Vachi staff on /platform.
   planPaid: boolean('plan_paid').notNull().default(false),
+  // Every in-app notification is also emailed unless this is turned off on /account.
+  emailNotifications: boolean('email_notifications').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

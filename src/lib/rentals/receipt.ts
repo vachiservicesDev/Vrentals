@@ -74,7 +74,7 @@ export async function sendReceipt(d: Details, appUrl: string): Promise<{ emailed
   const facts = receiptFacts(d);
   const message = receiptText(facts);
   if (d.lease.tenantId) {
-    await notify({ accountId: d.lease.tenantId, title: `Rent received for ${monthName(d.charge.period)}`, message, link: receiptPath(d.charge.id) });
+    await notify({ accountId: d.lease.tenantId, title: `Rent received for ${monthName(d.charge.period)}`, message, link: receiptPath(d.charge.id), email: false });
   }
   if (!smtpConfigured()) return { emailed: false };
   try {
