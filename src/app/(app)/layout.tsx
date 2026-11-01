@@ -95,7 +95,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
       <Footer
         withTabBar
-        links={landlord ? [...items.filter((i) => i.href !== '/notifications'), { href: '/reports/home', label: 'Homeowner tax summary' }] : items}
+        links={landlord ? [...items.filter((i) => i.href !== '/notifications' && i.href !== '/reports/home'), { href: '/reports/home', label: 'Homeowner tax summary' }] : items}
         note={landlord ? undefined : 'Your rent, repairs and lease in one place. Questions about your home? Contact your landlord.'}
       />
       <BottomNav items={items} />
