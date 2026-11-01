@@ -2,25 +2,28 @@ import { eq } from 'drizzle-orm';
 import type { User } from '@supabase/supabase-js';
 import { db } from '@/db';
 import { accounts, platformAdmins } from '@/db/schema';
-import { LAPSED_MESSAGE, planLapsed, trialPlan } from '@/lib/rentals/plans';
+import { LAPSED_MESSAGE, planLapsed } from '@/lib/rentals/plans';
+import { accountFromInvite } from '@/lib/rentals/licenses';
 import { createClient } from '@/lib/supabase/server';
 
 /**
- * The Vrentals account for a Supabase login. A landlord who signed up here gets theirs created on
- * first use (the sign-up form tags the login with signup_role "landlord"); tenants get theirs when
- * their landlord invites them. Any other login in the same Supabase project (for example someone
- * from another app) has no account and no access.
+ * The Vrentals account for a Supabase login. Sign-up is invite-only: a landlord or homeowner account
+ * is created on first use only when the login came through an unused invitation link from Vachi
+ * staff (/platform), and it gets the license on that link. Tenants get theirs when their landlord
+ * invites them. Any other login in the same Supabase project has no account and no access.
  */
 export async function accountFor(user: Pick<User, 'id' | 'email' | 'user_metadata'>) {
   const [existing] = await db.select().from(accounts).where(eq(accounts.id, user.id)).limit(1);
   if (existing) return existing;
   if (user.user_metadata?.signup_role !== 'landlord' || !user.email) return null;
-  const [created] = await db
-    .insert(accounts)
-    .values({ id: user.id, email: user.email.toLowerCase(), role: 'landlord', kind: user.user_metadata?.account_kind === 'homeowner' ? 'homeowner' : 'landlord', fullName: user.user_metadata?.full_name || null, ...trialPlan() })
-    .onConflictDoNothing()
-    .returning();
-  return created ?? (await db.select().from(accounts).where(eq(accounts.id, user.id)).limit(1))[0] ?? null;
+  const token = user.user_metadata?.license_invite;
+  if (typeof token !== 'string') return null;
+  return accountFromInvite(token, {
+    id: user.id,
+    email: user.email,
+    kind: user.user_metadata?.account_kind === 'homeowner' ? 'homeowner' : 'landlord',
+    fullName: user.user_metadata?.full_name || null,
+  });
 }
 
 async function current() {

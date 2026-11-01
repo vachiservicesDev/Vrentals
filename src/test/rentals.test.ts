@@ -242,10 +242,12 @@ describe('Rentals', () => {
 describe('accounts', () => {
   beforeEach(resetDb);
 
-  it('a landlord sign-up gets a landlord account on first use; other logins get none', async () => {
+  it('sign-up is invite-only: a login without a valid invitation gets no account', async () => {
     const { accountFor } = await import('@/lib/auth/guards');
-    const signedUp = await accountFor({ id: '8f6f2a8e-6f0a-4f43-8e1e-1d8f7b9c1a01', email: 'New@Example.com', user_metadata: { signup_role: 'landlord', full_name: 'Ravi' } });
-    expect(signedUp).toMatchObject({ role: 'landlord', email: 'new@example.com', fullName: 'Ravi' });
+    const uninvited = await accountFor({ id: '8f6f2a8e-6f0a-4f43-8e1e-1d8f7b9c1a01', email: 'New@Example.com', user_metadata: { signup_role: 'landlord', full_name: 'Ravi' } });
+    expect(uninvited).toBeNull();
+    const badLink = await accountFor({ id: '8f6f2a8e-6f0a-4f43-8e1e-1d8f7b9c1a03', email: 'new@example.com', user_metadata: { signup_role: 'landlord', license_invite: 'not-a-real-token' } });
+    expect(badLink).toBeNull();
     const stranger = await accountFor({ id: '8f6f2a8e-6f0a-4f43-8e1e-1d8f7b9c1a02', email: 'someone@example.com', user_metadata: {} });
     expect(stranger).toBeNull();
   });

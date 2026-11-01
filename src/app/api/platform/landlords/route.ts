@@ -4,14 +4,14 @@ import { db } from '@/db';
 import { accounts, properties } from '@/db/schema';
 import { requirePlatformAdmin } from '@/lib/auth/guards';
 
-/** Every landlord who owns homes here, with their plan and how much of it they use. Vachi staff only. */
+/** Every landlord and homeowner account (not co-landlords), with their plan and how much of it they use. Vachi staff only. */
 export async function GET() {
   const gate = await requirePlatformAdmin();
   if (!gate.ok) return NextResponse.json({ message: gate.message }, { status: gate.status });
 
   const [owners, homes, team] = await Promise.all([
     db
-      .select({ id: accounts.id, email: accounts.email, fullName: accounts.fullName, homeLimit: accounts.homeLimit, planExpires: accounts.planExpires, isActive: accounts.isActive, createdAt: accounts.createdAt })
+      .select({ id: accounts.id, email: accounts.email, fullName: accounts.fullName, homeLimit: accounts.homeLimit, planExpires: accounts.planExpires, planPaid: accounts.planPaid, kind: accounts.kind, isActive: accounts.isActive, createdAt: accounts.createdAt })
       .from(accounts)
       .where(and(eq(accounts.role, 'landlord'), isNull(accounts.actsFor)))
       .orderBy(asc(accounts.email)),

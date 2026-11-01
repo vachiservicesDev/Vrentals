@@ -36,8 +36,30 @@ export const accounts = rentals.table('accounts', {
   // no limit. After planExpires the account is read-only until the plan is renewed.
   homeLimit: integer('home_limit'),
   planExpires: date('plan_expires'),
+  // Whether the plan has been paid for. Set by Vachi staff on /platform.
+  planPaid: boolean('plan_paid').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Invitation links Vachi staff send from /platform. Each carries a license that the new account
+ * gets when it signs up through the link. One use only; staff can revoke an unused link.
+ */
+export const licenseInvites = rentals.table('license_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  token: varchar('token', { length: 64 }).notNull().unique(),
+  email: varchar('email', { length: 320 }),
+  kind: varchar('kind', { length: 10 }).notNull().default('landlord'),
+  homeLimit: integer('home_limit'),
+  planExpires: date('plan_expires'),
+  paid: boolean('paid').notNull().default(false),
+  note: varchar('note', { length: 200 }),
+  createdBy: uuid('created_by').references(() => accounts.id, { onDelete: 'set null' }),
+  usedBy: uuid('used_by').references(() => accounts.id, { onDelete: 'set null' }),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 /** Vachi staff who manage landlords' plans on /platform. Added by hand in SQL, never through the app. */

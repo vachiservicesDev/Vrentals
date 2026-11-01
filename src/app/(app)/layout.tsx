@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/reports/home', label: 'Taxes' },
         { href: '/notifications', label: 'Notifications', badge: session.unread },
         { href: '/account', label: 'Account' },
-        ...(session.platformAdmin ? [{ href: '/platform', label: 'Landlord plans' }] : []),
+        ...(session.platformAdmin ? [{ href: '/platform', label: 'Licenses' }] : []),
       ]
     : landlord
     ? [
@@ -33,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/reports', label: 'Money & taxes' },
         { href: '/notifications', label: 'Notifications', badge: session.unread },
         { href: '/account', label: 'Account' },
-        ...(session.platformAdmin ? [{ href: '/platform', label: 'Landlord plans' }] : []),
+        ...(session.platformAdmin ? [{ href: '/platform', label: 'Licenses' }] : []),
       ]
     : [
         { href: '/home', label: 'My home' },
