@@ -10,6 +10,8 @@ export const ICONS: Record<string, string> = {
   '/dashboard': 'M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5',
   '/home': 'M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5',
   '/reports': 'M4 20V10m6 10V4m6 16v-7m6 7H2',
+  '/reports/home': 'M4 20V10m6 10V4m6 16v-7m6 7H2',
+  '/expenses': 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',
   '/notifications': 'M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0',
   '/account': 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7.5 8a7.5 7.5 0 0 1 15 0',
   '/platform': 'M4 6h16M4 12h16M4 18h10',

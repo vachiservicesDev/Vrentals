@@ -20,7 +20,7 @@ export function BottomNav({ items }: { items: NavItem[] }) {
       <ul className="mx-auto flex max-w-md">
         {items.map((item) => {
           const on = item.href === current;
-          const label = item.label === 'Money & taxes' ? 'Money' : item.label === 'Notifications' ? 'Alerts' : item.label === 'Landlord plans' ? 'Plans' : item.label;
+          const label = item.label === 'Money & taxes' ? 'Taxes' : item.label === 'Notifications' ? 'Alerts' : item.label === 'Landlord plans' ? 'Plans' : item.label;
           return (
             <li key={item.href} className="flex-1">
               <Link

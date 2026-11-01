@@ -44,6 +44,7 @@ export const documentSchema = uploadRequestSchema.extend({
   name: z.string().trim().min(1, 'Give it a name, like "2026 homeowners policy".').max(200),
   expiresOn: z.union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a full date.')]).optional(),
   notes: z.string().trim().max(2000).optional(),
+  transactionId: z.string().uuid().optional(),
 });
 
 /** Where a home's file goes in the bucket: under its owner and home, with a random part so names never clash. */

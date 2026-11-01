@@ -25,7 +25,7 @@ const kindLabel = (v: string) => DOCUMENT_KINDS.find((k) => k.value === v)?.labe
 const sizeLabel = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /** A home's private papers. Only the landlord and co-landlords can list or open them; tenants have no way in. */
-export function DocumentsPanel({ propertyId }: { propertyId: string }) {
+export function DocumentsPanel({ propertyId, defaultKind, onChange }: { propertyId: string; defaultKind?: string; onChange?: () => void }) {
   const list = useResource<{ documents: Doc[] }>(`/api/properties/${propertyId}/documents`);
   const action = useAction();
   const [rowError, setRowError] = useState<string | null>(null);
@@ -62,6 +62,7 @@ export function DocumentsPanel({ propertyId }: { propertyId: string }) {
     if (saved.ok) {
       form.reset();
       list.reload();
+      onChange?.();
     }
   }
 
@@ -149,7 +150,7 @@ export function DocumentsPanel({ propertyId }: { propertyId: string }) {
               <FieldHelp name="f-doc-file" hint="PDF, photo, Word, Excel or text, up to 25 MB." error={fileError ?? undefined} />
             </div>
             <FieldRow cols={3}>
-              <SelectField name="kind" label="Kind" required placeholder="Choose one" options={[...DOCUMENT_KINDS]} errors={action.fieldErrors} id="f-doc-kind" />
+              <SelectField name="kind" label="Kind" required placeholder="Choose one" options={[...DOCUMENT_KINDS]} defaultValue={defaultKind} errors={action.fieldErrors} id="f-doc-kind" />
               <TextField name="name" label="Name" hint="Like “2026 homeowners policy”. Blank uses the file name." errors={action.fieldErrors} id="f-doc-name" />
               <TextField name="expiresOn" label="Expires or renews" type="date" hint="For a policy or permit." errors={action.fieldErrors} id="f-doc-expires" />
             </FieldRow>

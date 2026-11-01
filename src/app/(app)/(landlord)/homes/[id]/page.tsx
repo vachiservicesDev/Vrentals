@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, formValues, useAction, useResource } from '@/lib/client/api';
 import { PAYMENT_METHODS, REMINDER_KINDS, REMINDER_REPEATS, REPAIR_STATUSES, REPAIR_URGENCIES, labelFrom, statusOf } from '@/lib/status';
@@ -8,13 +8,17 @@ import { Button, buttonClass } from '@/components/ui/Button';
 import { receiptText, reminderText, smsLink } from '@/lib/rentals/messages';
 import { CheckboxField, FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
+import { StepForm } from '@/components/ui/StepForm';
 import { MoneyPanel } from '@/components/money/MoneyPanel';
 import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { ApplicationsPanel, type Application } from '@/components/leasing/ApplicationsPanel';
 import { ListingPanel } from '@/components/leasing/ListingPanel';
 import { PROPERTY_USES } from '@/lib/rentals/homeowner';
 import { STATE_OPTIONS, stateHints, stateName } from '@/lib/rentals/states';
-import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatMoney } from '@/components/ui/ui';
+import { Alert, Chip, DataTable, DetailList, EmptyState, Loading, PageHeader, Panel, TextLink, When, formatDate, formatMoney } from '@/components/ui/ui';
+import { Check } from '@/components/ui/Check';
+import { LeasingPath } from '@/components/leasing/LeasingPath';
+import { ACTIVE_STEP, LEASING_STEPS, landlordStep } from '@/lib/rentals/leasingPath';
 
 interface Property {
   id: string;
@@ -125,8 +129,12 @@ export default function RentalHomePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { data, error, loading, reload } = useResource<Detail>(`/api/properties/${params.id}`);
+  const rental = data?.property.use !== 'own';
+  const apps = useResource<{ applications: { status: string }[] }>(data && rental ? `/api/properties/${params.id}/applications` : null);
+  const docs = useResource<{ documents: { kind: string; createdAt: string }[] }>(data && rental ? `/api/properties/${params.id}/documents` : null);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
-  const newLease = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useHashTab();
+  const [step, setStep] = useState<number | null>(null);
   const back = { href: '/dashboard', label: 'Dashboard' };
 
   if (loading && !data) return <Loading />;
@@ -142,100 +150,348 @@ export default function RentalHomePage() {
   const lease = leases.find((l) => l.status === 'active') ?? null;
   const past = leases.filter((l) => l.status !== 'active');
   const address = [property.address, property.city, `${property.state} ${property.zip ?? ''}`.trim()].filter(Boolean).join(', ');
+  const openRepairs = repairs.filter((r) => r.status === 'open' || r.status === 'scheduled');
+  const nextBill = reminders.filter((r) => !r.doneAt).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  const deleted = () => router.push('/dashboard');
 
-  if (property.use === 'own')
+  if (property.use === 'own') {
+    const tabs: HomeTab[] = [
+      { key: 'bills', label: 'Bills', count: reminders.filter((r) => !r.doneAt).length },
+      { key: 'money', label: 'Expenses' },
+      { key: 'repairs', label: 'Repairs', count: openRepairs.length },
+      { key: 'documents', label: 'Documents' },
+      { key: 'details', label: 'Home details' },
+    ];
+    const current = tabs.some((t) => t.key === tab) ? tab : 'bills';
     return (
       <>
         <PageHeader back={back} eyebrow="Your home" title={property.name} lead={address} actions={<Chip tone="info">You live here</Chip>} />
-        <div className="grid gap-8">
-          <RemindersPanel propertyId={property.id} reminders={reminders} own onChange={reload} />
-          <MoneyPanel propertyId={property.id} own reloadKey={moneyKey(repairs, reminders)} />
-          <RepairsPanel propertyId={property.id} repairs={repairs} own onChange={reload} />
-          <DocumentsPanel propertyId={property.id} />
-          <HomePanel property={property} onChange={reload} onDeleted={() => router.push('/dashboard')} />
-        </div>
+        <Highlights
+          items={[
+            { label: 'Next bill', value: nextBill ? `${nextBill.title} · ${formatDate(nextBill.dueDate)}` : 'None set', onClick: () => setTab('bills') },
+            { label: 'Open repairs', value: String(openRepairs.length), onClick: () => setTab('repairs') },
+          ]}
+        />
+        <TabBar tabs={tabs} current={current} onChange={setTab} />
+        {current === 'bills' && <RemindersPanel propertyId={property.id} reminders={reminders} own onChange={reload} />}
+        {current === 'money' && <MoneyPanel propertyId={property.id} own reloadKey={moneyKey(repairs, reminders)} />}
+        {current === 'repairs' && <RepairsPanel propertyId={property.id} repairs={repairs} own onChange={reload} />}
+        {current === 'documents' && <DocumentsPanel propertyId={property.id} />}
+        {current === 'details' && <HomePanel property={property} onChange={reload} onDeleted={deleted} />}
       </>
     );
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const leaseStartWindow = lease ? new Date(Date.parse(`${lease.startDate}T00:00:00Z`) - 60 * 86_400_000).toISOString() : '';
+  const inspections = lease ? (docs.data?.documents ?? []).filter((d) => d.kind === 'inspection' && d.createdAt >= leaseStartWindow).length : 0;
+  const current = landlordStep({ applications: apps.data?.applications ?? [], lease, inspections, today });
+  const shown = step ?? current;
+  const charge = lease ? charges.filter((c) => c.leaseId === lease.id) : [];
+  const owed = charge.filter((c) => c.status === 'late' || c.status === 'due' || c.status === 'partial').reduce((sum, c) => sum + Number(c.amount) - Number(c.paidAmount), 0);
+  const tabs: HomeTab[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'lease', label: lease ? 'Tenant and lease' : 'Find a tenant' },
+    ...(lease ? [{ key: 'rent', label: 'Rent', count: owed > 0 ? 1 : 0 }] : []),
+    { key: 'repairs', label: 'Repairs', count: openRepairs.length },
+    { key: 'bills', label: 'Bills', count: reminders.filter((r) => !r.doneAt).length },
+    { key: 'money', label: 'Expenses' },
+    { key: 'documents', label: 'Documents' },
+    { key: 'details', label: 'Home details' },
+  ];
+  const currentTab = tabs.some((t) => t.key === tab) ? tab : 'overview';
+  const openStep = (i: number) => {
+    setStep(i);
+    setTab('lease');
+  };
 
   return (
     <>
       <PageHeader back={back} eyebrow="Rental home" title={property.name} lead={address} actions={lease ? <Chip tone="live">Occupied</Chip> : <Chip tone="new">Vacant</Chip>} />
-      <div className="grid gap-8">
-        {lease ? (
-          <LeasePanel lease={lease} state={property.state} landlordName={landlordName} onChange={reload} />
-        ) : (
-          <div ref={newLease}>
-            <NewLeasePanel key={prefill?.tenantEmail ?? 'blank'} propertyId={property.id} state={property.state} prefill={prefill} onChange={reload} />
-          </div>
-        )}
-        <ListingPanel propertyId={property.id} state={property.state} defaultRent={lease?.monthlyRent ?? past[0]?.monthlyRent ?? null} vacant={!lease} />
-        <ApplicationsPanel
-          propertyId={property.id}
-          canStartLease={!lease}
-          onStartLease={(a: Application, askingRent) => {
-            setPrefill({ tenantName: a.fullName, tenantEmail: a.email, tenantPhone: a.phone, startDate: a.moveInDate ?? '', monthlyRent: askingRent ? String(Number(askingRent)) : '' });
-            newLease.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}
-        />
-        {lease && <RentPanel lease={lease} home={property.name} landlordName={landlordName} charges={charges.filter((c) => c.leaseId === lease.id)} onChange={reload} />}
-        <RepairsPanel propertyId={property.id} repairs={repairs} onChange={reload} />
-        <RemindersPanel propertyId={property.id} reminders={reminders} onChange={reload} />
+      <Highlights
+        items={[
+          { label: 'Tenant', value: lease ? lease.tenantName : 'None yet', onClick: () => setTab('lease') },
+          { label: 'Rent', value: lease ? `${formatMoney(lease.monthlyRent)} a month` : '—', onClick: lease ? () => setTab('rent') : undefined },
+          { label: 'Owed now', value: lease ? formatMoney(owed) : '—', tone: owed > 0 ? 'danger' : undefined, onClick: lease ? () => setTab('rent') : undefined },
+          { label: 'Open repairs', value: String(openRepairs.length), onClick: () => setTab('repairs') },
+          { label: 'Next bill', value: nextBill ? `${nextBill.title} · ${formatDate(nextBill.dueDate)}` : 'None set', onClick: () => setTab('bills') },
+        ]}
+      />
+      <TabBar tabs={tabs} current={currentTab} onChange={setTab} />
+
+      {currentTab === 'overview' && (
+        <div className="grid gap-8">
+          {current < ACTIVE_STEP && (
+            <Panel title="Leasing progress" description="Where this home is, from the first application to the tenant moving in. Choose a step to see what it needs.">
+              <LeasingPath current={current} onSelect={openStep} who={(i) => LEASING_STEPS[i].who} />
+              <div className="mt-5">
+                <Button onClick={() => openStep(current)}>Continue: {LEASING_STEPS[current].label}</Button>
+              </div>
+            </Panel>
+          )}
+          <Panel title="What needs you">
+            <ul className="grid gap-3">
+              {current < ACTIVE_STEP && <Todo onClick={() => openStep(current)} text={NEXT_STEP_TEXT[current]} />}
+              {owed > 0 && <Todo tone="danger" onClick={() => setTab('rent')} text={`${formatMoney(owed)} rent is owed. Record a payment or send a reminder.`} />}
+              {openRepairs.map((r) => (
+                <Todo key={r.id} tone={r.urgency === 'urgent' ? 'danger' : undefined} onClick={() => setTab('repairs')} text={`Repair: ${r.title}${r.appointmentAt ? `, visit ${formatDate(r.appointmentAt, true)}` : ', no visit set yet'}.`} />
+              ))}
+              {nextBill && <Todo onClick={() => setTab('bills')} text={`${nextBill.title} is due ${formatDate(nextBill.dueDate)}${nextBill.amount ? ` (${formatMoney(nextBill.amount)})` : ''}.`} />}
+              {current === ACTIVE_STEP && owed === 0 && openRepairs.length === 0 && !nextBill && <li className="text-ink-2">Nothing right now. Rent is paid and there are no open repairs.</li>}
+            </ul>
+          </Panel>
+        </div>
+      )}
+
+      {currentTab === 'lease' && (
+        <div className="grid gap-8">
+          {current < ACTIVE_STEP && (
+            <Panel>
+              <LeasingPath current={current} selected={shown} onSelect={setStep} who={(i) => LEASING_STEPS[i].who} />
+              {shown !== current && (
+                <p className="mt-4 text-sm text-ink-2">
+                  {shown < current ? 'This step is done. ' : 'This step comes later. '}
+                  <button type="button" className="link" onClick={() => setStep(null)}>
+                    Go to the current step
+                  </button>
+                </p>
+              )}
+            </Panel>
+          )}
+          {shown <= 1 && (
+            <>
+              {shown === 0 && <ListingPanel propertyId={property.id} state={property.state} defaultRent={lease?.monthlyRent ?? past[0]?.monthlyRent ?? null} vacant={!lease} />}
+              <ApplicationsPanel
+                propertyId={property.id}
+                canStartLease={!lease}
+                onStartLease={(a: Application, askingRent) => {
+                  setPrefill({ tenantName: a.fullName, tenantEmail: a.email, tenantPhone: a.phone, startDate: a.moveInDate ?? '', monthlyRent: askingRent ? String(Number(askingRent)) : '' });
+                  setStep(2);
+                  apps.reload();
+                }}
+              />
+            </>
+          )}
+          {shown >= 2 &&
+            (lease ? (
+              <LeasePanel lease={lease} state={property.state} landlordName={landlordName} onChange={reload} />
+            ) : (
+              <NewLeasePanel
+                key={prefill?.tenantEmail ?? 'blank'}
+                propertyId={property.id}
+                state={property.state}
+                prefill={prefill}
+                onChange={async () => {
+                  // Stay on this step until the saved lease is loaded, then follow the bar.
+                  await reload();
+                  setStep(null);
+                }}
+              />
+            ))}
+          {shown === 4 && lease && <MoveInPanel lease={lease} done={inspections > 0} onUploaded={docs.reload} propertyId={property.id} />}
+          {past.length > 0 && <PastLeases past={past} charges={charges} />}
+        </div>
+      )}
+
+      {currentTab === 'rent' && lease && <RentPanel lease={lease} home={property.name} landlordName={landlordName} charges={charge} onChange={reload} />}
+      {currentTab === 'repairs' && <RepairsPanel propertyId={property.id} repairs={repairs} onChange={reload} />}
+      {currentTab === 'bills' && <RemindersPanel propertyId={property.id} reminders={reminders} onChange={reload} />}
+      {currentTab === 'money' && (
         <MoneyPanel
           propertyId={property.id}
           // Paying a bill or fixing a repair with a cost adds an expense, so refresh with them.
           reloadKey={moneyKey(repairs, reminders)}
         />
-        <DocumentsPanel propertyId={property.id} />
-        <HomePanel property={property} onChange={reload} onDeleted={() => router.push('/dashboard')} />
-        {past.length > 0 && (
-          <section>
-            <h2 className="font-display mb-3 text-xl font-semibold text-ink">Past leases</h2>
-            <ul className="grid gap-3">
-              {past.map((l) => {
-                const ledger = charges.filter((c) => c.leaseId === l.id);
-                const owed = ledger.reduce((sum, c) => sum + Number(c.amount) - Number(c.paidAmount), 0);
-                return (
-                  <li key={l.id} className="rounded-lg border border-line bg-white">
-                    <details>
-                      <summary className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
-                        <span className="font-semibold text-ink">{l.tenantName}</span>
-                        <span className="text-sm text-muted">
-                          {formatMoney(l.monthlyRent)} a month · <When iso={l.startDate} /> to <When iso={l.endDate} />
-                          {owed > 0 && <span className="font-semibold text-danger-700"> · {formatMoney(owed)} unpaid</span>}
-                        </span>
-                      </summary>
-                      <div className="grid gap-4 border-t border-line p-4">
-                        {l.agreement && (
-                          <p>
-                            <TextLink href={`/agreements/${l.agreement.id}`}>{l.agreement.status === 'signed' ? 'Signed lease' : 'Written lease (not fully signed)'}</TextLink>
-                          </p>
-                        )}
-                        {ledger.length === 0 ? (
-                          <p className="text-ink-2">No rent was recorded for this lease.</p>
-                        ) : (
-                          <DataTable
-                            caption={`Rent history for ${l.tenantName}`}
-                            rows={ledger}
-                            rowKey={(c) => c.id}
-                            columns={[
-                              { header: 'Month', primary: true, cell: (c) => monthLabel(c.period) },
-                              { header: 'Rent', align: 'right', cell: (c) => formatMoney(c.amount) },
-                              { header: 'Paid', align: 'right', cell: (c) => formatMoney(c.paidAmount) },
-                              { header: 'Paid on', cell: (c) => <When iso={c.paidOn} /> },
-                              { header: 'Status', cell: (c) => <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip> },
-                            ]}
-                          />
-                        )}
-                      </div>
-                    </details>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-      </div>
+      )}
+      {currentTab === 'documents' && <DocumentsPanel propertyId={property.id} />}
+      {currentTab === 'details' && <HomePanel property={property} onChange={reload} onDeleted={deleted} />}
     </>
+  );
+}
+
+const NEXT_STEP_TEXT = [
+  'Find a tenant: share your listing and showing times so people can apply.',
+  'Review the applications and approve or decline each one.',
+  'Write the lease: add the tenant and the terms, then prepare the written lease.',
+  'Signing: sign the lease and wait for the tenant to sign it.',
+  'Move-in: invite the tenant to Vrentals and save the move-in inspection.',
+  '',
+];
+
+type HomeTab = { key: string; label: string; count?: number };
+
+/** The tab in the address (#rent), so links and the back button land on the right tab. */
+function useHashTab(): [string, (tab: string) => void] {
+  const [tab, setTabState] = useState('');
+  useEffect(() => {
+    // Older links name a section; send them to the tab that holds it.
+    const alias: Record<string, string> = { listing: 'lease', applications: 'lease', reminders: 'bills' };
+    const read = () => {
+      const hash = window.location.hash.slice(1);
+      setTabState(alias[hash] ?? hash);
+    };
+    read();
+    window.addEventListener('hashchange', read);
+    return () => window.removeEventListener('hashchange', read);
+  }, []);
+  const setTab = (next: string) => {
+    window.history.replaceState(null, '', `#${next}`);
+    setTabState(next);
+    const bar = document.getElementById('home-tabs');
+    if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block: 'start' });
+  };
+  return [tab, setTab];
+}
+
+/** One section of the home at a time, like the tabs on a record in a CRM. Scrolls sideways on a phone. */
+function TabBar({ tabs, current, onChange }: { tabs: HomeTab[]; current: string; onChange: (key: string) => void }) {
+  return (
+    <div id="home-tabs" className="mb-6 scroll-mt-32 border-b border-line">
+      <div role="tablist" aria-label="Sections of this home" className="-mb-px flex gap-1 overflow-x-auto">
+        {tabs.map((t) => {
+          const on = t.key === current;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => onChange(t.key)}
+              className={`inline-flex min-h-12 shrink-0 items-center gap-2 border-b-2 px-3 text-[0.9375rem] font-medium ${on ? 'border-brand-700 text-brand-800' : 'border-transparent text-ink-2 hover:text-brand-700'}`}
+            >
+              {t.label}
+              {!!t.count && <span className="rounded-full bg-accent-600 px-1.5 text-xs font-semibold leading-5 text-white">{t.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** The few facts about the home that matter most, at the top. Each one opens its tab. */
+function Highlights({ items }: { items: { label: string; value: string; tone?: 'danger'; onClick?: () => void }[] }) {
+  return (
+    <dl className="-mx-4 mb-6 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
+      {items.map((i) => (
+        <div key={i.label} className="w-40 shrink-0 rounded-lg border border-line bg-white px-4 py-3 sm:w-auto sm:min-w-0">
+          <dt className="text-sm text-muted">{i.label}</dt>
+          <dd className={`mt-0.5 truncate font-semibold ${i.tone === 'danger' ? 'text-danger-700' : 'text-ink'}`}>
+            {i.onClick ? (
+              <button type="button" onClick={i.onClick} className="max-w-full truncate text-left hover:underline">
+                {i.value}
+              </button>
+            ) : (
+              i.value
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Todo({ text, onClick, tone }: { text: string; onClick: () => void; tone?: 'danger' }) {
+  return (
+    <li>
+      <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-lg border border-line px-4 py-3 text-left hover:border-brand-600 hover:bg-brand-50">
+        <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone === 'danger' ? 'bg-danger-700' : 'bg-accent-600'}`} />
+        <span className="flex-1 text-ink">{text}</span>
+        <span aria-hidden="true" className="text-brand-700">
+          →
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** Move-in: invite the tenant, walk through the home together and keep the inspection with the lease. */
+function MoveInPanel({ lease, done, propertyId, onUploaded }: { lease: Lease; done: boolean; propertyId: string; onUploaded: () => void }) {
+  return (
+    <Panel title="Move-in" description={`${lease.tenantName} moves in on ${formatDate(lease.startDate)}.`}>
+      <ol className="grid gap-3">
+        <MoveInItem done={!!lease.tenantId} title="Invite the tenant to Vrentals" text="Use “Create invite link” or “Email the invite” above. They can then see rent, sign and report repairs." />
+        <MoveInItem
+          done={done}
+          title="Do the move-in inspection together"
+          text="Walk through each room on move-in day. Note anything already damaged, take photos, and both sign a checklist. Upload the signed checklist and photos below as “Inspection or permit”."
+        />
+      </ol>
+      <div className="mt-6">
+        <DocumentsUploadHint propertyId={propertyId} onUploaded={onUploaded} />
+      </div>
+    </Panel>
+  );
+}
+
+function MoveInItem({ done, title, text }: { done: boolean; title: string; text: string }) {
+  return (
+    <li className="flex gap-3 rounded-lg border border-line px-4 py-3">
+      <span aria-hidden="true" className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full ${done ? 'bg-green-700 text-white' : 'border-2 border-line-strong'}`}>
+        {done && <Check className="h-3.5 w-3.5 text-white" />}
+      </span>
+      <span>
+        <span className="block font-semibold text-ink">
+          {title}
+          <span className="sr-only">{done ? ' (done)' : ' (to do)'}</span>
+        </span>
+        <span className="block text-sm text-ink-2">{text}</span>
+      </span>
+    </li>
+  );
+}
+
+function DocumentsUploadHint({ propertyId, onUploaded }: { propertyId: string; onUploaded: () => void }) {
+  return <DocumentsPanel propertyId={propertyId} defaultKind="inspection" onChange={onUploaded} />;
+}
+
+function PastLeases({ past, charges }: { past: Lease[]; charges: Charge[] }) {
+  return (
+    <section>
+      <h2 className="font-display mb-3 text-xl font-semibold text-ink">Past leases</h2>
+      <ul className="grid gap-3">
+        {past.map((l) => {
+          const ledger = charges.filter((c) => c.leaseId === l.id);
+          const owed = ledger.reduce((sum, c) => sum + Number(c.amount) - Number(c.paidAmount), 0);
+          return (
+            <li key={l.id} className="rounded-lg border border-line bg-white">
+              <details>
+                <summary className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
+                  <span className="font-semibold text-ink">{l.tenantName}</span>
+                  <span className="text-sm text-muted">
+                    {formatMoney(l.monthlyRent)} a month · <When iso={l.startDate} /> to <When iso={l.endDate} />
+                    {owed > 0 && <span className="font-semibold text-danger-700"> · {formatMoney(owed)} unpaid</span>}
+                  </span>
+                </summary>
+                <div className="grid gap-4 border-t border-line p-4">
+                  {l.agreement && (
+                    <p>
+                      <TextLink href={`/agreements/${l.agreement.id}`}>{l.agreement.status === 'signed' ? 'Signed lease' : 'Written lease (not fully signed)'}</TextLink>
+                    </p>
+                  )}
+                  {ledger.length === 0 ? (
+                    <p className="text-ink-2">No rent was recorded for this lease.</p>
+                  ) : (
+                    <DataTable
+                      caption={`Rent history for ${l.tenantName}`}
+                      rows={ledger}
+                      rowKey={(c) => c.id}
+                      columns={[
+                        { header: 'Month', primary: true, cell: (c) => monthLabel(c.period) },
+                        { header: 'Rent', align: 'right', cell: (c) => formatMoney(c.amount) },
+                        { header: 'Paid', align: 'right', cell: (c) => formatMoney(c.paidAmount) },
+                        { header: 'Paid on', cell: (c) => <When iso={c.paidOn} /> },
+                        { header: 'Status', cell: (c) => <Chip tone={statusOf('rent', c.status).tone}>{statusOf('rent', c.status).label}</Chip> },
+                      ]}
+                    />
+                  )}
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -324,9 +580,8 @@ function AgreementSection({ lease, state, landlordName, onChange }: { lease: Lea
   const t = (terms.data?.agreement.terms ?? {}) as Record<string, string | boolean | undefined>;
   const str = (k: string) => (typeof t[k] === 'string' ? (t[k] as string) : '');
 
-  async function prepare(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  async function prepare(form: HTMLFormElement) {
+    const fd = new FormData(form);
     const body: Record<string, unknown> = Object.fromEntries([...fd.entries()].map(([k, v]) => [k, String(v).trim()]));
     body.builtBefore1978 = fd.get('builtBefore1978') === 'on';
     const result = await action.run<{ agreement: { id: string } }>('prepare', `/api/leases/${lease.id}/agreement`, { body });
@@ -351,18 +606,43 @@ function AgreementSection({ lease, state, landlordName, onChange }: { lease: Lea
       {(!a || a.status === 'draft') && !(a && terms.loading) && (
         <details className="rounded-lg border border-line" open={!a}>
           <summary className="flex min-h-11 cursor-pointer items-center px-4 font-semibold text-brand-700">{a ? 'Change the lease terms' : 'Prepare the lease'}</summary>
-          <form onSubmit={prepare} noValidate className="grid gap-5 border-t border-line p-4">
-            <FormStatus error={action.error} fieldErrors={action.fieldErrors} labels={{ landlordName: 'Landlord name', landlordAddress: 'Address for notices' }} />
+          <div className="border-t border-line p-4">
+            <StepForm
+              onSubmit={prepare}
+              submitLabel={a ? 'Update the lease' : 'Prepare the lease'}
+              busy={action.busy === 'prepare'}
+              busyLabel="Preparing…"
+              fieldErrors={action.fieldErrors}
+              status={<FormStatus error={action.error} fieldErrors={action.fieldErrors} labels={{ landlordName: 'Landlord name', landlordAddress: 'Address for notices' }} />}
+              steps={[
+              {
+                title: 'You',
+                content: (
+                  <>
             <p className="text-sm text-muted">Rent, due day, late fee, deposit and dates come from the lease above. To change those, end and re-add the lease before preparing.</p>
             <FieldRow>
               <TextField name="landlordName" label="Landlord name" required defaultValue={str('landlordName') || landlordName || ''} hint="You, or your LLC. You'll sign with this exact name." errors={action.fieldErrors} id={`f-a-name-${lease.id}`} />
               <TextField name="landlordAddress" label="Address for notices" required defaultValue={str('landlordAddress')} hint="Where the tenant sends written notices." errors={action.fieldErrors} id={`f-a-addr-${lease.id}`} />
             </FieldRow>
+                  </>
+                ),
+              },
+              {
+                title: 'Who lives there',
+                content: (
+                  <>
             <TextField name="occupants" label="Other people who will live there" defaultValue={str('occupants')} hint="Names of other adults and children, if any." errors={action.fieldErrors} id={`f-a-occ-${lease.id}`} />
             <FieldRow>
               <TextField name="utilitiesTenant" label="Tenant pays for" defaultValue={str('utilitiesTenant') || 'electricity, gas, internet and cable'} errors={action.fieldErrors} id={`f-a-ut-${lease.id}`} />
               <TextField name="utilitiesLandlord" label="Landlord pays for" defaultValue={str('utilitiesLandlord') || 'water, sewer and trash'} errors={action.fieldErrors} id={`f-a-ul-${lease.id}`} />
             </FieldRow>
+                  </>
+                ),
+              },
+              {
+                title: 'House rules',
+                content: (
+                  <>
             <FieldRow>
               <TextField name="parking" label="Parking" defaultValue={str('parking')} hint='Like "Two spaces, #14 and #15".' errors={action.fieldErrors} id={`f-a-park-${lease.id}`} />
               <TextField name="pets" label="Pets" defaultValue={str('pets')} hint="Leave empty for no pets without your consent." errors={action.fieldErrors} id={`f-a-pets-${lease.id}`} />
@@ -381,14 +661,21 @@ function AgreementSection({ lease, state, landlordName, onChange }: { lease: Lea
               />
               <TextField name="rentPaymentMethod" label="How rent is paid" defaultValue={str('rentPaymentMethod')} hint="Like “Zelle or bank payment in the Vrentals app”." errors={action.fieldErrors} id={`f-a-pay-${lease.id}`} />
             </FieldRow>
+                  </>
+                ),
+              },
+              {
+                title: 'Safety and extras',
+                content: (
+                  <>
             <CheckboxField name="builtBefore1978" label="The home was built before 1978 (adds the lead paint clause)" hint="Before your tenant signs, give them the EPA lead pamphlet and the federal lead disclosure form, signed by both of you. Upload the signed form under Documents." defaultChecked={t.builtBefore1978 === true} id={`f-a-lead-${lease.id}`} />
             <TextAreaField name="extraTerms" label="Additional terms" rows={4} defaultValue={str('extraTerms')} hint="Anything else you both agree to, like snow removal or lawn care." errors={action.fieldErrors} id={`f-a-extra-${lease.id}`} />
-            <div>
-              <Button type="submit" busy={action.busy === 'prepare'} busyLabel="Preparing…">
-                {a ? 'Update the lease' : 'Prepare the lease'}
-              </Button>
-            </div>
-          </form>
+                  </>
+                ),
+              },
+              ]}
+            />
+          </div>
         </details>
       )}
     </section>
@@ -399,45 +686,73 @@ function NewLeasePanel({ propertyId, state, prefill, onChange }: { propertyId: s
   const hints = stateHints(state);
   const action = useAction();
 
-  async function save(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const result = await action.run('save', `/api/properties/${propertyId}/leases`, { body: formValues(e.currentTarget) });
+  async function save(form: HTMLFormElement) {
+    const result = await action.run('save', `/api/properties/${propertyId}/leases`, { body: formValues(form) });
     if (result.ok) onChange();
   }
 
   return (
     <Panel title="Add the tenant and lease" description="This home is vacant. Add the tenant and the lease terms, then prepare the written lease for both of you to sign and invite the tenant so they can sign, see their rent and report repairs.">
-      <form onSubmit={save} noValidate className="grid gap-5">
-        {prefill && <Alert tone="info">Filled in from {prefill.tenantName}&apos;s application. Check everything before saving.</Alert>}
-        <FormStatus
-          error={action.error}
-          fieldErrors={action.fieldErrors}
-          labels={{ tenantName: 'Tenant name', tenantEmail: 'Tenant email', startDate: 'Lease starts', endDate: 'Lease ends', monthlyRent: 'Monthly rent', dueDay: 'Rent due day' }}
-        />
-        <FieldRow cols={3}>
-          <TextField name="tenantName" label="Tenant name" required defaultValue={prefill?.tenantName} errors={action.fieldErrors} />
-          <TextField name="tenantEmail" label="Tenant email" type="email" required defaultValue={prefill?.tenantEmail} errors={action.fieldErrors} />
-          <TextField name="tenantPhone" label="Tenant phone" type="tel" defaultValue={prefill?.tenantPhone} errors={action.fieldErrors} />
-        </FieldRow>
-        <FieldRow cols={3}>
-          <TextField name="monthlyRent" label="Monthly rent ($)" type="number" inputMode="decimal" min={0} step="0.01" required defaultValue={prefill?.monthlyRent} errors={action.fieldErrors} />
-          <TextField name="dueDay" label="Rent due day" type="number" min={1} max={28} defaultValue={1} required hint="Day of the month, 1 to 28." errors={action.fieldErrors} />
-          <TextField name="graceDays" label="Grace period (days)" type="number" min={0} max={31} defaultValue={hints.graceDays} hint={hints.grace} errors={action.fieldErrors} />
-        </FieldRow>
-        <FieldRow cols={3}>
-          <TextField name="startDate" label="Lease starts" type="date" required defaultValue={prefill?.startDate} errors={action.fieldErrors} />
-          <TextField name="endDate" label="Lease ends" type="date" hint="Leave empty for month to month." errors={action.fieldErrors} />
-          <TextField name="securityDeposit" label="Security deposit ($)" type="number" inputMode="decimal" min={0} step="0.01" hint={hints.deposit} errors={action.fieldErrors} />
-        </FieldRow>
-        <FieldRow cols={3}>
-          <TextField name="lateFee" label="Late fee ($)" type="number" inputMode="decimal" min={0} step="0.01" errors={action.fieldErrors} />
-        </FieldRow>
-        <div>
-          <Button type="submit" busy={action.busy === 'save'} busyLabel="Saving…">
-            Save lease
-          </Button>
+      {prefill && (
+        <div className="mb-6">
+          <Alert tone="info">Filled in from {prefill.tenantName}&apos;s application. Check everything before saving.</Alert>
         </div>
-      </form>
+      )}
+      <StepForm
+        onSubmit={save}
+        submitLabel="Save lease"
+        busy={action.busy === 'save'}
+        fieldErrors={action.fieldErrors}
+        status={
+          <FormStatus
+            error={action.error}
+            fieldErrors={action.fieldErrors}
+            labels={{ tenantName: 'Tenant name', tenantEmail: 'Tenant email', startDate: 'Lease starts', endDate: 'Lease ends', monthlyRent: 'Monthly rent', dueDay: 'Rent due day' }}
+          />
+        }
+        steps={[
+          {
+            title: 'Tenant',
+            hint: 'Who is renting this home. Their email is how they sign in later.',
+            content: (
+              <FieldRow cols={3}>
+                <TextField name="tenantName" label="Tenant name" required defaultValue={prefill?.tenantName} errors={action.fieldErrors} />
+                <TextField name="tenantEmail" label="Tenant email" type="email" required defaultValue={prefill?.tenantEmail} errors={action.fieldErrors} />
+                <TextField name="tenantPhone" label="Tenant phone" type="tel" defaultValue={prefill?.tenantPhone} errors={action.fieldErrors} />
+              </FieldRow>
+            ),
+          },
+          {
+            title: 'Rent',
+            hint: 'How much the rent is, and when it is due.',
+            content: (
+              <>
+                <FieldRow>
+                  <TextField name="monthlyRent" label="Monthly rent ($)" type="number" inputMode="decimal" min={0} step="0.01" required defaultValue={prefill?.monthlyRent} errors={action.fieldErrors} />
+                  <TextField name="dueDay" label="Rent due day" type="number" min={1} max={28} defaultValue={1} required hint="Day of the month, 1 to 28." errors={action.fieldErrors} />
+                </FieldRow>
+                <FieldRow>
+                  <TextField name="graceDays" label="Grace period (days)" type="number" min={0} max={31} defaultValue={hints.graceDays} hint={hints.grace} errors={action.fieldErrors} />
+                  <TextField name="lateFee" label="Late fee ($)" type="number" inputMode="decimal" min={0} step="0.01" errors={action.fieldErrors} />
+                </FieldRow>
+              </>
+            ),
+          },
+          {
+            title: 'Dates and deposit',
+            hint: 'When the lease starts and ends, and the security deposit.',
+            content: (
+              <>
+                <FieldRow>
+                  <TextField name="startDate" label="Lease starts" type="date" required defaultValue={prefill?.startDate} errors={action.fieldErrors} />
+                  <TextField name="endDate" label="Lease ends" type="date" hint="Leave empty for month to month." errors={action.fieldErrors} />
+                </FieldRow>
+                <TextField name="securityDeposit" label="Security deposit ($)" type="number" inputMode="decimal" min={0} step="0.01" hint={hints.deposit} errors={action.fieldErrors} />
+              </>
+            ),
+          },
+        ]}
+      />
     </Panel>
   );
 }

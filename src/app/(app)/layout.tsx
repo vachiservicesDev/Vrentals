@@ -16,9 +16,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session.account.isActive) redirect('/auth/signout?reason=deactivated');
 
   const landlord = session.account.role === 'landlord';
-  const items = landlord
+  const homeowner = landlord && session.account.kind === 'homeowner';
+  const items = homeowner
+    ? [
+        { href: '/dashboard', label: 'My home' },
+        { href: '/expenses', label: 'Expenses' },
+        { href: '/reports/home', label: 'Taxes' },
+        { href: '/notifications', label: 'Notifications', badge: session.unread },
+        { href: '/account', label: 'Account' },
+        ...(session.platformAdmin ? [{ href: '/platform', label: 'Landlord plans' }] : []),
+      ]
+    : landlord
     ? [
         { href: '/dashboard', label: 'Dashboard' },
+        { href: '/expenses', label: 'Expenses' },
         { href: '/reports', label: 'Money & taxes' },
         { href: '/notifications', label: 'Notifications', badge: session.unread },
         { href: '/account', label: 'Account' },

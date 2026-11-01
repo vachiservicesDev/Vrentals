@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { formValues, useAction, useResource } from '@/lib/client/api';
 import { REMINDER_KINDS, labelFrom, statusOf } from '@/lib/status';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { FieldRow, SelectField, TextAreaField, TextField } from '@/components/ui/fields';
 import { PROPERTY_USES } from '@/lib/rentals/homeowner';
 import { FormStatus } from '@/components/ui/forms';
+import { StepForm } from '@/components/ui/StepForm';
 import { Alert, Chip, DataTable, EmptyState, Loading, PageHeader, Panel, StatCard, When, formatMoney } from '@/components/ui/ui';
 
 interface Home {
@@ -22,6 +24,7 @@ interface Home {
 }
 
 interface Overview {
+  kind: 'landlord' | 'homeowner';
   homes: number;
   occupied: number;
   month: string;
@@ -39,17 +42,16 @@ export default function DashboardPage() {
   const homes = useResource<{ properties: Home[] }>('/api/properties');
   const action = useAction();
   const rentAction = useAction();
+  const [addKey, setAddKey] = useState(0);
   const o = overview.data;
   const list = homes.data?.properties ?? [];
 
-  async function addHome(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
+  async function addHome(form: HTMLFormElement) {
     const values = formValues(form);
     const done = values.use === 'own' ? 'Home added. Open it to add your mortgage, tax and other payments.' : 'Home added. Open it to add the tenant and lease.';
     const result = await action.run('add', '/api/properties', { body: values }, done);
     if (result.ok) {
-      form.reset();
+      setAddKey((k) => k + 1);
       homes.reload();
       overview.reload();
     }
@@ -73,7 +75,8 @@ export default function DashboardPage() {
   const thisMonth = o?.month.slice(0, 7) ?? '';
   const behindTotal = (o?.behind ?? []).reduce((sum, b) => sum + Number(b.owed), 0);
   // Someone who only tracks the home they live in has no rent to collect.
-  const onlyOwn = list.length > 0 && list.every((h) => h.use === 'own');
+  const homeowner = o?.kind === 'homeowner';
+  const onlyOwn = list.length > 0 ? list.every((h) => h.use === 'own') : homeowner;
   const anyOwn = list.some((h) => h.use === 'own');
 
   return (
@@ -212,34 +215,55 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <Panel title="Add a home">
-          <form onSubmit={addHome} noValidate className="grid gap-5">
-            <FormStatus
-              error={action.error}
-              success={action.success}
-              fieldErrors={action.fieldErrors}
-              labels={{ name: 'Name', address: 'Street address', city: 'City', state: 'State', zip: 'ZIP code' }}
-            />
-            <SelectField name="use" label="How do you use this home?" options={[...PROPERTY_USES]} defaultValue="rental" hint="Pick “I live here” to track your own home's payments, repairs and year-end taxes." id="f-add-use" />
-            <FieldRow>
-              <TextField name="name" label="Name" required hint='What you call it, like "Unit 12" or "Wooster Heights townhome".' errors={action.fieldErrors} maxLength={150} />
-              <TextField name="address" label="Street address" required errors={action.fieldErrors} autoComplete="street-address" />
-            </FieldRow>
-            <FieldRow cols={3}>
-              <TextField name="city" label="City" defaultValue="Danbury" errors={action.fieldErrors} />
-              <SelectField name="state" label="State" options={STATE_OPTIONS} defaultValue="CT" errors={action.fieldErrors} />
-              <TextField name="zip" label="ZIP code" inputMode="numeric" errors={action.fieldErrors} />
-            </FieldRow>
-            <FieldRow>
-              <TextField name="hoaName" label="HOA name" errors={action.fieldErrors} />
-              <TextAreaField name="hoaContact" label="HOA contact" rows={2} hint="Manager, phone, email, portal." errors={action.fieldErrors} />
-            </FieldRow>
-            <div>
-              <Button type="submit" busy={action.busy === 'add'} busyLabel="Adding…">
-                Add home
-              </Button>
+        <Panel
+          // A new account starts here: the form comes first until there's a home.
+          className={homes.data && list.length === 0 ? 'order-first' : ''}
+          title={onlyOwn && list.length === 0 ? 'Add your home' : 'Add a home'} description={list.length === 0 ? 'Two short steps. You can change any of this later.' : undefined}>
+          {action.success && (
+            <div className="mb-5">
+              <FormStatus success={action.success} />
             </div>
-          </form>
+          )}
+          <StepForm
+            // Start again after each home added, and once we know if this is a homeowner (the default home use).
+            key={`${addKey}-${homeowner}`}
+            onSubmit={addHome}
+            submitLabel="Add home"
+            busy={action.busy === 'add'}
+            busyLabel="Adding…"
+            fieldErrors={action.fieldErrors}
+            status={<FormStatus error={action.error} fieldErrors={action.fieldErrors} labels={{ name: 'Name', address: 'Street address', city: 'City', state: 'State', zip: 'ZIP code' }} />}
+            steps={[
+              {
+                title: 'The home',
+                hint: 'What you call it and where it is.',
+                content: (
+                  <>
+                    <SelectField name="use" label="How do you use this home?" options={[...PROPERTY_USES]} defaultValue={homeowner ? 'own' : 'rental'} hint="Pick “I live here” to track your own home's payments, repairs and year-end taxes." id="f-add-use" />
+                    <FieldRow>
+                      <TextField name="name" label="Name" required hint='What you call it, like "Unit 12" or "Our house".' errors={action.fieldErrors} maxLength={150} />
+                      <TextField name="address" label="Street address" required errors={action.fieldErrors} autoComplete="street-address" />
+                    </FieldRow>
+                    <FieldRow cols={3}>
+                      <TextField name="city" label="City" defaultValue="Danbury" errors={action.fieldErrors} />
+                      <SelectField name="state" label="State" options={STATE_OPTIONS} defaultValue="CT" errors={action.fieldErrors} />
+                      <TextField name="zip" label="ZIP code" inputMode="numeric" errors={action.fieldErrors} />
+                    </FieldRow>
+                  </>
+                ),
+              },
+              {
+                title: 'HOA',
+                hint: 'If the home has a homeowners association. Skip this if not.',
+                content: (
+                  <FieldRow>
+                    <TextField name="hoaName" label="HOA name" errors={action.fieldErrors} />
+                    <TextAreaField name="hoaContact" label="HOA contact" rows={2} hint="Manager, phone, email, portal." errors={action.fieldErrors} />
+                  </FieldRow>
+                ),
+              },
+            ]}
+          />
         </Panel>
       </div>
     </>
