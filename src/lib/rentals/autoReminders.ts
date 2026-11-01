@@ -75,7 +75,7 @@ export async function runRentReminders(today: string, appUrl: string): Promise<R
     const title = late ? `${monthName(charge.period)} rent is late` : `${monthName(charge.period)} rent is due soon`;
     let delivered = false;
     if (lease.tenantId) {
-      await notify({ accountId: lease.tenantId, title, message, urgent: late, link: '/home' });
+      await notify({ accountId: lease.tenantId, title, message, urgent: late, link: '/home', email: false });
       delivered = true;
     }
     if (email) {

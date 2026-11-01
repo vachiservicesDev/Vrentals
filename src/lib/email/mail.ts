@@ -126,3 +126,25 @@ export function coLandlordEmail(name: string, ownerName: string, url: string) {
   );
   return { subject, html, text: `Hi ${first},\n\n${intro}\n\nChoose a password here:\n${url}` };
 }
+
+/** To someone who paid for a Vrentals plan online: their one-time sign-up link. */
+export function planPurchaseEmail(name: string, planName: string, url: string) {
+  const first = name.trim().split(/\s+/)[0] || 'there';
+  const subject = 'Your Vrentals account is ready to set up';
+  const intro = `Thank you for buying the ${planName} plan. Your payment went through, and your account is ready for you.`;
+  const html = layout(
+    `Hi ${escape(first)},`,
+    [escape(intro), 'Use the button below to create your account. It takes about a minute.'],
+    { label: 'Create my account', url },
+    'This link works once, for this email address. Keep it to yourself.',
+  );
+  return { subject, html, text: `Hi ${first},\n\n${intro}\n\nCreate your account here:\n${url}\n\nThis link works once, for this email address.` };
+}
+
+/** The email copy of an in-app notification. */
+export function noticeEmail(name: string, title: string, message: string, url: string) {
+  const first = name.trim().split(/\s+/)[0] || 'there';
+  const paragraphs = message.split('\n').filter(Boolean).map(escape);
+  const html = layout(escape(title), [`Hi ${escape(first)},`, ...paragraphs], { label: 'Open Vrentals', url }, 'You can turn these emails off on your Account page in Vrentals.');
+  return { subject: title, html, text: `Hi ${first},\n\n${message}\n\n${url}\n\nYou can turn these emails off on your Account page in Vrentals.` };
+}

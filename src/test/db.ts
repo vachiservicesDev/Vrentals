@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { accounts } from '@/db/schema';
 
-const TABLES = ['lease_agreements', 'applications', 'showing_bookings', 'showing_slots', 'listings', 'platform_admins', 'rent_payments', 'documents', 'transactions', 'notifications', 'rent_charges', 'repair_requests', 'reminders', 'leases', 'properties', 'accounts'];
+const TABLES = ['plan_purchases', 'price_plans', 'license_invites', 'lease_agreements', 'applications', 'showing_bookings', 'showing_slots', 'listings', 'platform_admins', 'rent_payments', 'documents', 'transactions', 'notifications', 'rent_charges', 'repair_requests', 'reminders', 'leases', 'properties', 'accounts'];
 
 /** Wipes every app table between tests. Guarded by setup.ts's DATABASE_URL check. */
 export async function resetDb(): Promise<void> {

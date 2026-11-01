@@ -1,11 +1,14 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Logo } from '@/components/ui/Logo';
 import { buttonClass } from '@/components/ui/Button';
 import { TopNav } from '@/components/shell/TopNav';
+import { GlobalSearch } from '@/components/shell/GlobalSearch';
 import { BottomNav } from '@/components/shell/BottomNav';
 import { Footer } from '@/components/shell/Footer';
 import { Alert } from '@/components/ui/ui';
 import { LAPSED_MESSAGE, planLapsed } from '@/lib/rentals/plans';
+import { billingConfigured } from '@/lib/rentals/billing';
 import { homeFor, requireSession } from '@/lib/auth/session';
 import { signOutAction } from '../actions';
 
@@ -24,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/reports/home', label: 'Taxes' },
         { href: '/notifications', label: 'Notifications', badge: session.unread },
         { href: '/account', label: 'Account' },
-        ...(session.platformAdmin ? [{ href: '/platform', label: 'Landlord plans' }] : []),
+        ...(session.platformAdmin ? [{ href: '/platform', label: 'Licenses' }] : []),
       ]
     : landlord
     ? [
@@ -33,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/reports', label: 'Money & taxes' },
         { href: '/notifications', label: 'Notifications', badge: session.unread },
         { href: '/account', label: 'Account' },
-        ...(session.platformAdmin ? [{ href: '/platform', label: 'Landlord plans' }] : []),
+        ...(session.platformAdmin ? [{ href: '/platform', label: 'Licenses' }] : []),
       ]
     : [
         { href: '/home', label: 'My home' },
@@ -53,6 +56,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mx-auto w-full max-w-5xl px-4 md:px-8">
           <div className="flex min-h-16 items-center justify-between gap-4">
             <Logo href={homeFor(session.account.role)} />
+            {landlord && (
+              <div className="flex flex-1 justify-end md:justify-center">
+                <GlobalSearch />
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <span className="hidden max-w-56 truncate text-sm text-muted sm:inline">{session.email}</span>
               <form action={signOutAction}>
@@ -72,6 +80,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="mb-6">
             <Alert tone="info" title="Your plan has ended">
               {LAPSED_MESSAGE}
+              {billingConfigured() && (
+                <>
+                  {' '}
+                  <Link href="/pricing" className="link font-semibold">
+                    Renew online
+                  </Link>
+                </>
+              )}
             </Alert>
           </div>
         )}

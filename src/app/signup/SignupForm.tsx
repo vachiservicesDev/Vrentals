@@ -14,15 +14,16 @@ function friendly(message: string) {
 }
 
 /**
- * Landlord sign-up through Supabase Auth. The login is tagged signup_role "landlord"; the landlord
- * account itself is created on first sign-in (src/lib/auth/guards.ts). If the Supabase project
- * asks for email confirmation, the person confirms first and lands on /auth/confirm.
+ * Sign-up through Supabase Auth, only from an invitation link. The login is tagged signup_role
+ * "landlord" and carries the invitation's token; the account itself is created on first sign-in
+ * with the invitation's license (src/lib/auth/guards.ts). If the Supabase project asks for email
+ * confirmation, the person confirms first and lands on /auth/confirm.
  */
-export function SignupForm() {
+export function SignupForm({ invite }: { invite: { token: string; email: string | null; kind: 'homeowner' | 'landlord' } }) {
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [kind, setKind] = useState<'homeowner' | 'landlord'>('landlord');
+  const [kind, setKind] = useState<'homeowner' | 'landlord'>(invite.kind);
   const errorRef = useRef<HTMLParagraphElement>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -41,7 +42,7 @@ export function SignupForm() {
       email,
       password,
       options: {
-        data: { signup_role: 'landlord', account_kind: kind, full_name: String(form.get('fullName') ?? '').trim() },
+        data: { signup_role: 'landlord', account_kind: kind, license_invite: invite.token, full_name: String(form.get('fullName') ?? '').trim() },
         emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
       },
     });
@@ -92,7 +93,7 @@ export function SignupForm() {
         <p className="text-sm text-muted">Both? Pick either one. You can add both kinds of home.</p>
       </fieldset>
       <TextField name="fullName" label="Your name" required hideOptional autoComplete="name" />
-      <TextField name="email" label="Email" type="email" required hideOptional autoComplete="email" inputMode="email" />
+      <TextField name="email" label="Email" type="email" required hideOptional autoComplete="email" inputMode="email" defaultValue={invite.email ?? undefined} readOnly={!!invite.email} hint={invite.email ? 'Your invitation is for this email.' : undefined} />
       <TextField name="password" label="Password" type="password" required hideOptional autoComplete="new-password" hint="At least 10 characters." />
       <Button type="submit" size="lg" busy={busy} busyLabel="Creating account" className="w-full">
         Create account

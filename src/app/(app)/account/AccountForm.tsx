@@ -3,17 +3,17 @@
 import { useRouter } from 'next/navigation';
 import { useAction } from '@/lib/client/api';
 import { Button } from '@/components/ui/Button';
-import { FieldRow, SelectField, TextField } from '@/components/ui/fields';
+import { CheckboxField, FieldRow, SelectField, TextField } from '@/components/ui/fields';
 import { FormStatus } from '@/components/ui/forms';
 
-export function AccountForm({ fullName, phone, kind }: { fullName: string; phone: string; kind?: string }) {
+export function AccountForm({ fullName, phone, kind, emailNotifications }: { fullName: string; phone: string; kind?: string; emailNotifications: boolean }) {
   const router = useRouter();
   const action = useAction();
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const result = await action.run('save', '/api/account', { method: 'PATCH', body: { fullName: String(fd.get('fullName') ?? ''), phone: String(fd.get('phone') ?? ''), ...(kind ? { kind: String(fd.get('kind') ?? kind) } : {}) } }, 'Saved.');
+    const result = await action.run('save', '/api/account', { method: 'PATCH', body: { fullName: String(fd.get('fullName') ?? ''), phone: String(fd.get('phone') ?? ''), emailNotifications: fd.get('emailNotifications') === 'on', ...(kind ? { kind: String(fd.get('kind') ?? kind) } : {}) } }, 'Saved.');
     if (result.ok) router.refresh();
   }
 
@@ -37,6 +37,7 @@ export function AccountForm({ fullName, phone, kind }: { fullName: string; phone
           id="f-account-kind"
         />
       )}
+      <CheckboxField name="emailNotifications" label="Email me a copy of every notification" defaultChecked={emailNotifications} hint="You always see them under Notifications in the app." />
       <div>
         <Button type="submit" busy={action.busy === 'save'} busyLabel="Saving…">
           Save

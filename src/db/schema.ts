@@ -36,8 +36,61 @@ export const accounts = rentals.table('accounts', {
   // no limit. After planExpires the account is read-only until the plan is renewed.
   homeLimit: integer('home_limit'),
   planExpires: date('plan_expires'),
+  // Whether the plan has been paid for. Set by Vachi staff on /platform.
+  planPaid: boolean('plan_paid').notNull().default(false),
+  // Every in-app notification is also emailed unless this is turned off on /account.
+  emailNotifications: boolean('email_notifications').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Invitation links Vachi staff send from /platform. Each carries a license that the new account
+ * gets when it signs up through the link. One use only; staff can revoke an unused link.
+ */
+export const licenseInvites = rentals.table('license_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  token: varchar('token', { length: 64 }).notNull().unique(),
+  email: varchar('email', { length: 320 }),
+  kind: varchar('kind', { length: 10 }).notNull().default('landlord'),
+  homeLimit: integer('home_limit'),
+  planExpires: date('plan_expires'),
+  paid: boolean('paid').notNull().default(false),
+  note: varchar('note', { length: 200 }),
+  createdBy: uuid('created_by').references(() => accounts.id, { onDelete: 'set null' }),
+  usedBy: uuid('used_by').references(() => accounts.id, { onDelete: 'set null' }),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Prices Vachi staff set on /platform. Each sells a license for some months; paying again extends it. */
+export const pricePlans = rentals.table('price_plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 80 }).notNull(),
+  kind: varchar('kind', { length: 10 }).notNull().default('landlord'),
+  homeLimit: integer('home_limit'),
+  months: integer('months').notNull().default(1),
+  price: decimal('price', { precision: 10, scale: 2 }).notNull(),
+  description: varchar('description', { length: 300 }),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** One online payment for a price plan, from checkout to confirmed. */
+export const planPurchases = rentals.table('plan_purchases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  planId: uuid('plan_id').references(() => pricePlans.id, { onDelete: 'set null' }),
+  planName: varchar('plan_name', { length: 80 }).notNull(),
+  email: varchar('email', { length: 320 }).notNull(),
+  fullName: varchar('full_name', { length: 200 }),
+  amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  inviteId: uuid('invite_id').references(() => licenseInvites.id, { onDelete: 'set null' }),
+  status: varchar('status', { length: 12 }).notNull().default('started'),
+  stripeSessionId: varchar('stripe_session_id', { length: 255 }).unique(),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 /** Vachi staff who manage landlords' plans on /platform. Added by hand in SQL, never through the app. */

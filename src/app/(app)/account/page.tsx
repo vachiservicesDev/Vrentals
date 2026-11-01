@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireSession } from '@/lib/auth/session';
 import { DetailList, PageHeader, Panel } from '@/components/ui/ui';
 import { planLabel, planLapsed } from '@/lib/rentals/plans';
+import { billingConfigured } from '@/lib/rentals/billing';
 import { AccountForm } from './AccountForm';
 import { PaymentsPanel } from './PaymentsPanel';
 import { TeamPanel } from './TeamPanel';
@@ -19,7 +20,7 @@ export default async function AccountPage() {
       <PageHeader title="Account" />
       <div className="grid gap-8">
         <Panel title="Your details" description={landlord ? 'Your tenants see this name, email and phone as their contact.' : undefined}>
-          <AccountForm fullName={account.fullName ?? ''} phone={account.phone ?? ''} kind={landlord && !account.actsFor ? account.kind : undefined} />
+          <AccountForm fullName={account.fullName ?? ''} phone={account.phone ?? ''} emailNotifications={account.emailNotifications} kind={landlord && !account.actsFor ? account.kind : undefined} />
         </Panel>
         {landlord && <TeamPanel />}
         {landlord && <PaymentsPanel />}
@@ -28,7 +29,23 @@ export default async function AccountPage() {
             items={[
               { label: 'Email', value: account.email },
               { label: 'Account type', value: landlord ? (account.actsFor ? 'Co-landlord' : account.kind === 'homeowner' ? 'Homeowner' : 'Landlord') : 'Tenant' },
-              ...(landlord && !account.actsFor ? [{ label: 'Plan', value: planLapsed(account) ? `${planLabel(account)} (ended: read-only)` : planLabel(account) }] : []),
+              ...(landlord && !account.actsFor
+                ? [
+                    {
+                      label: 'Plan',
+                      value: (
+                        <>
+                          {planLapsed(account) ? `${planLabel(account)} (ended: read-only)` : planLabel(account)}
+                          {billingConfigured() && (
+                            <Link href="/pricing" className="link ml-2">
+                              Renew or upgrade
+                            </Link>
+                          )}
+                        </>
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
           <p className="mt-6">
