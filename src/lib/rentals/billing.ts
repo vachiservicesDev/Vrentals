@@ -1,12 +1,12 @@
 import type Stripe from 'stripe';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/db';
-import { accounts, licenseInvites, planPurchases, platformAdmins, pricePlans } from '@/db/schema';
+import { accounts, licenseInvites, planPurchases, pricePlans } from '@/db/schema';
 import { addMonths, todayEastern } from '@/lib/dates';
 import { planPurchaseEmail, sendMail, smtpConfigured } from '@/lib/email/mail';
 import { notify } from '@/lib/notify';
 import { stripe } from '@/lib/stripe';
-import { newInviteToken } from './licenses';
+import { newInviteToken, tellAdmins } from './licenses';
 
 /**
  * Selling Vrentals licenses online. Vachi staff set the prices on /platform. A buyer pays once on
@@ -77,19 +77,9 @@ export async function startPlanCheckout(
   return { ok: true, url: session.url };
 }
 
-async function adminRecipients() {
-  return db
-    .select({ id: accounts.id, email: accounts.email })
-    .from(platformAdmins)
-    .innerJoin(accounts, eq(accounts.id, platformAdmins.accountId));
-}
-
 /** Tells every Vachi staff member, in the app and (through notify) by email. */
-export async function notifyAdmins(title: string, message: string, appUrl: string, urgent = false): Promise<void> {
-  const admins = await adminRecipients();
-  for (const admin of admins) {
-    await notify({ accountId: admin.id, title, message, urgent, link: '/platform' });
-  }
+export async function notifyAdmins(title: string, message: string, _appUrl: string, urgent = false): Promise<void> {
+  await tellAdmins(title, message, urgent);
 }
 
 /**

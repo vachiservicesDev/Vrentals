@@ -1,11 +1,10 @@
 import Link from 'next/link';
-import { InstallApp } from './InstallApp';
 
 type FooterLink = { href: string; label: string };
 
 /**
- * The footer on every page: the mark and what Vrentals is for, the main places to go, a way to
- * add the app to a phone's home screen, and the fine print. On phones it clears the tab bar.
+ * The footer on every page: the mark and what Vrentals is for, the main places to go, and the fine
+ * print. On phones it clears the tab bar.
  */
 export function Footer({ links = [], note, withTabBar = false, width = 'max-w-5xl' }: { links?: FooterLink[]; note?: string; withTabBar?: boolean; width?: string }) {
   const year = new Date().getFullYear();
@@ -24,7 +23,6 @@ export function Footer({ links = [], note, withTabBar = false, width = 'max-w-5x
             </span>
           </p>
           <p className="max-w-sm text-sm text-ink-2">{note ?? 'Rent, repairs, bills and taxes for the homes you rent out and the home you live in.'}</p>
-          <InstallApp />
         </div>
         {links.length > 0 && (
           <nav aria-label="Footer">

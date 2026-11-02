@@ -79,6 +79,9 @@ export default function DashboardPage() {
   const onlyOwn = list.length > 0 ? list.every((h) => h.use === 'own') : homeowner;
   const anyOwn = list.some((h) => h.use === 'own');
 
+  // Wait for the overview: until then we don't know if this is a homeowner, and the rent cards would flash.
+  if (!o && overview.loading) return <Loading label="Loading your dashboard" />;
+
   return (
     <>
       <PageHeader

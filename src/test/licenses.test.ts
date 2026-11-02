@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { accounts, licenseInvites, platformAdmins } from '@/db/schema';
+import { accounts, licenseInvites, notifications, platformAdmins } from '@/db/schema';
 import { GET as listInvites, POST as createInvite } from '@/app/api/platform/invites/route';
 import { DELETE as cancelInvite } from '@/app/api/platform/invites/[id]/route';
 import { GET as platformList } from '@/app/api/platform/landlords/route';
@@ -37,7 +37,7 @@ describe('licenses and invitation links', () => {
   });
 
   it('an invitation link creates the account with its license, once', async () => {
-    await staff();
+    const admin = await staff();
     const res = await createInvite(jsonRequest({ kind: 'homeowner', homeLimit: '3', planExpires: '2027-06-30', paid: true, note: 'Trial 1' }));
     expect(res.status).toBe(201);
     const { invite } = await json(res);
@@ -47,6 +47,12 @@ describe('licenses and invitation links', () => {
     expect(account).toMatchObject({ email: 'pat@example.com', kind: 'homeowner', homeLimit: 3, planExpires: '2027-06-30', planPaid: true });
     const [used] = await db.select().from(licenseInvites).where(eq(licenseInvites.id, invite.id));
     expect(used.usedBy).toBe(account!.id);
+    // Staff are told about the sign-up.
+    const notices = await db.select().from(notifications).where(eq(notifications.accountId, admin.id));
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ title: 'New sign-up', link: '/platform' });
+    expect(notices[0].message).toContain('Pat (pat@example.com) signed up as a homeowner');
+    expect(notices[0].message).toContain('Trial 1');
 
     // The same link can't make a second account.
     expect(await accountFor(login('8f6f2a8e-6f0a-4f43-8e1e-1d8f7b9c1b02', 'other@example.com', invite.token))).toBeNull();
